@@ -1,0 +1,42 @@
+{
+  "name": "flex-xml-parser",
+  "version": "1.0.0",
+  "description": "Flexible XML parser with pluggable output builders and value parsers",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "c8 --reporter=lcov --reporter=text jasmine specs/*spec.js"
+  },
+  "keywords": [
+    "xml",
+    "parser",
+    "fast",
+    "flexible",
+    "xml-parser",
+    "xml2js",
+    "xml2json"
+  ],
+  "author": "Amit Gupta",
+  "license": "MIT",
+  "dependencies": {
+    "jasmine": "^6.1.0",
+    "path-expression-matcher": ">=1.2.0",
+    "strnum": "^2.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "c8": "^11.0.0",
+    "fast-xml-parser": "^5.5.8"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./XMLParser": "./XMLParser.js",
+    "./OutputBuilders/JsObjBuilder": "./OutputBuilders/JsObjBuilder.js",
+    "./OutputBuilders/JsArrBuilder": "./OutputBuilders/JsArrBuilder.js",
+    "./OutputBuilders/JsMinArrBuilder": "./OutputBuilders/JsMinArrBuilder.js",
+    "./valueParsers/number": "./valueParsers/number.js",
+    "./valueParsers/boolean": "./valueParsers/booleanParser.js",
+    "./valueParsers/trim": "./valueParsers/trim.js",
+    "./valueParsers/currency": "./valueParsers/currency.js"
+  }
+}
