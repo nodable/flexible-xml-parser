@@ -1,55 +1,63 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
+import { collectRawAttributes } from './AttributeProcessor.js';
 
-/**
- * find paired tag for a stop node
- * @param {string} xmlDoc
- * @param {string} tagName
- * @param {number} i : start index
- */
-export function readStopNode(xmlDoc, tagName, i) {
-  const startIndex = i;
-  // Starting at 1 since we already have an open tag
-  let openTagCount = 1;
+// Re-export flushAttributes so Xml2JsParser and XmlSpecialTagsReader can
+// continue to import it from here without changing their import lines.
+export { flushAttributes } from './AttributeProcessor.js';
 
-  for (; i < xmlDoc.length; i++) {
-    if (xmlDoc[i] === "<") {
-      if (xmlDoc[i + 1] === "/") {//close tag
-        const closeIndex = findSubStrIndex(xmlDoc, ">", i, `${tagName} is not closed`);
-        let closeTagName = xmlDoc.substring(i + 2, closeIndex).trim();
-        if (closeTagName === tagName) {
-          openTagCount--;
-          if (openTagCount === 0) {
-            return {
-              tagContent: xmlDoc.substring(startIndex, i),
-              i: closeIndex
-            }
-          }
-        }
-        i = closeIndex;
-      } else if (xmlDoc[i + 1] === '?') {
-        const closeIndex = findSubStrIndex(xmlDoc, "?>", i + 1, "StopNode is not closed.")
-        i = closeIndex;
-      } else if (xmlDoc.substr(i + 1, 3) === '!--') {
-        const closeIndex = findSubStrIndex(xmlDoc, "-->", i + 3, "StopNode is not closed.")
-        i = closeIndex;
-      } else if (xmlDoc.substr(i + 1, 2) === '![') {
-        const closeIndex = findSubStrIndex(xmlDoc, "]]>", i, "StopNode is not closed.") - 2;
-        i = closeIndex;
-      } else {
-        const tagData = readTagExp(xmlDoc, i, '>')
 
-        if (tagData) {
-          const openTagName = tagData && tagData.tagName;
-          if (openTagName === tagName && tagData.tagExp[tagData.tagExp.length - 1] !== "/") {
-            openTagCount++;
-          }
-          i = tagData.closeIndex;
-        }
-      }
-    }
-  }//end for loop
-}
+//TODO: below code is not as per new APIs, need to refactor
+//TODO: check how stopNode functionalitiy is behaving for cases of quotes, comment, cdata etc as handled in this method
+// /**
+//  * find paired tag for a stop node
+//  * @param {string} xmlDoc
+//  * @param {string} tagName
+//  * @param {number} i : start index
+//  */
+// export function readStopNode(xmlDoc, tagName, i) {
+//   const startIndex = i;
+//   // Starting at 1 since we already have an open tag
+//   let openTagCount = 1;
+
+//   for (; i < xmlDoc.length; i++) {
+//     if (xmlDoc[i] === "<") {
+//       if (xmlDoc[i + 1] === "/") {//close tag
+//         const closeIndex = findSubStrIndex(xmlDoc, ">", i, `${tagName} is not closed`);
+//         let closeTagName = xmlDoc.substring(i + 2, closeIndex).trim();
+//         if (closeTagName === tagName) {
+//           openTagCount--;
+//           if (openTagCount === 0) {
+//             return {
+//               tagContent: xmlDoc.substring(startIndex, i),
+//               i: closeIndex
+//             }
+//           }
+//         }
+//         i = closeIndex;
+//       } else if (xmlDoc[i + 1] === '?') {
+//         const closeIndex = findSubStrIndex(xmlDoc, "?>", i + 1, "StopNode is not closed.")
+//         i = closeIndex;
+//       } else if (xmlDoc.substr(i + 1, 3) === '!--') {
+//         const closeIndex = findSubStrIndex(xmlDoc, "-->", i + 3, "StopNode is not closed.")
+//         i = closeIndex;
+//       } else if (xmlDoc.substr(i + 1, 2) === '![') {
+//         const closeIndex = findSubStrIndex(xmlDoc, "]]>", i, "StopNode is not closed.") - 2;
+//         i = closeIndex;
+//       } else {
+//         const tagData = readTagExp(xmlDoc, i, '>')
+
+//         if (tagData) {
+//           const openTagName = tagData && tagData.tagName;
+//           if (openTagName === tagName && tagData.tagExp[tagData.tagExp.length - 1] !== "/") {
+//             openTagCount++;
+//           }
+//           i = tagData.closeIndex;
+//         }
+//       }
+//     }
+//   }//end for loop
+// }
 
 /**
  * Read closing tag name.
@@ -65,23 +73,23 @@ export function readClosingTagName(source) {
   source.markTokenStart(1);
   let text = "";
   while (source.canRead()) {
-    let ch = source.readCh();
+    const ch = source.readCh();
     if (ch === ">") return text.trimEnd();
-    else text += ch;
+    else text += ch;// TODO: check for performance improvement
   }
   throw new ParseError(`Unexpected end of source reading closing tag '</${text}'`, ErrorCode.UNEXPECTED_END);
 }
 
 /**
- * Read XML tag and build attributes map.
- * This function can be used to read normal tag, pi tag.
- * This function can't be used to read comment, CDATA, DOCTYPE.
- * Eg <tag attr = ' some"' attr= ">" bool>
+ * Read an XML opening tag expression and return a tag descriptor.
+ *
+ * Handles normal tags — not comments, CDATA, or DOCTYPE.
+ * Example input (from source, after '<'): `tag attr='some"' attr2=">" bool>`
  *
  * Uses level-1 (inner) mark — see readClosingTagName for rationale.
  *
- * @param {object} parser
- * @returns tag expression includes tag name & attribute string
+ * @param {object} parser - Xml2JsParser instance
+ * @returns {{ tagName, selfClosing, rawAttributes, _attrsExp }}
  */
 export function readTagExp(parser) {
   parser.source.markTokenStart(1);
@@ -102,13 +110,10 @@ export function readTagExp(parser) {
       break;
     }
   }
+
   if (!EOE) {
-    // Buffer exhausted before '>' was found. If we were inside a quoted value,
-    // this is a chunk boundary mid-attribute (e.g. id="hello| |world") — not a
-    // syntax error. Throw UNEXPECTED_END so feed()/parseStream() rewinds to the
-    // level-0 outer mark and retries the full tag on the next chunk.
-    // UNCLOSED_QUOTE is only correct when '>' was found while quotes were still
-    // open, which is a genuine XML syntax error.
+    // Buffer exhausted before '>' — chunk boundary mid-tag. Throw UNEXPECTED_END
+    // so feed()/parseStream() rewinds to the level-0 outer mark and retries.
     throw new ParseError("Unexpected closing of source waiting for '>'", ErrorCode.UNEXPECTED_END);
   } else if (inSingleQuotes || inDoubleQuotes) {
     // '>' found but a quote was never closed — real syntax error.
@@ -117,9 +122,17 @@ export function readTagExp(parser) {
 
   const exp = parser.source.readStr(i);
   parser.source.updateBufferBoundary(i + 1);
-  return buildTagExpObj(exp, parser)
+  return buildTagExpObj(exp, parser);
 }
 
+/**
+ * Read a processing-instruction tag expression (<?name attrs?>).
+ *
+ * Uses level-1 (inner) mark — see readClosingTagName for rationale.
+ *
+ * @param {object} parser
+ * @returns {{ tagName, selfClosing, rawAttributes, _attrsExp }}
+ */
 export function readPiExp(parser) {
   parser.source.markTokenStart(1);
   let inSingleQuotes = false;
@@ -144,6 +157,7 @@ export function readPiExp(parser) {
       }
     }
   }
+
   if (!EOE) {
     // Buffer exhausted before '?>' — chunk boundary mid-PI-tag.
     throw new ParseError("Unexpected closing of source waiting for '?>'", ErrorCode.UNEXPECTED_END);
@@ -158,9 +172,18 @@ export function readPiExp(parser) {
 
   const exp = parser.source.readStr(i);
   parser.source.updateBufferBoundary(i + 1);
-  return buildTagExpObj(exp, parser)
+  return buildTagExpObj(exp, parser);
 }
 
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Parse a raw tag expression string into a structured tag descriptor.
+ *
+ * @param {string} exp    - everything between '<' and '>' (exclusive)
+ * @param {object} parser
+ * @returns {{ tagName, selfClosing, rawAttributes, _attrsExp }}
+ */
 function buildTagExpObj(exp, parser) {
   const tagExp = {
     tagName: "",
@@ -168,19 +191,17 @@ function buildTagExpObj(exp, parser) {
     rawAttributes: Object.create(null),
     _attrsExp: "", // stored for two-pass attribute flushing in readOpeningTag
   };
-  let attrsExp = "";
 
-  // Check for self-closing tag before setting the name
   if (exp[exp.length - 1] === "/") {
     tagExp.selfClosing = true;
     exp = exp.slice(0, -1); // Remove the trailing slash
   }
 
-  //separate tag name
+  // Separate tag name from attribute expression
+  let attrsExp = "";
   let i = 0;
   for (; i < exp.length; i++) {
-    const char = exp[i];
-    if (char === " ") {
+    if (exp[i] === " ") {
       tagExp.tagName = exp.substring(0, i);
       attrsExp = exp.substring(i + 1);
       break;
@@ -188,92 +209,14 @@ function buildTagExpObj(exp, parser) {
   }
   //only tag
   if (tagExp.tagName.length === 0 && i === exp.length) tagExp.tagName = exp;
-
   tagExp.tagName = tagExp.tagName.trimEnd();
+  tagExp._attrsExp = attrsExp;
 
-  tagExp._attrsExp = attrsExp;  // save for pass 2 (flushAttributes)
-
+  // Pass 1: collect raw attribute values for matcher.updateCurrent().
+  // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent().
   if (!parser.options.skip.attributes && attrsExp.length > 0) {
-    parseAttributesExp(attrsExp, parser, tagExp.rawAttributes);
+    collectRawAttributes(attrsExp, parser, tagExp.rawAttributes);
   }
 
   return tagExp;
 }
-
-const attrsRegx = new RegExp('([^\\s=]+)\\s*(=\\s*([\'"])([\\s\\S]*?)\\3)?', 'gm');
-
-/**
- * parseAttributesExp — two-pass attribute processing.
- *
- * Pass 1 (collectRawAttributes): populate rawAttributes map only.
- *   Called inside buildTagExpObj so rawAttributes is ready before
- *   readOpeningTag calls matcher.updateCurrent(rawAttributes).
- *
- * Pass 2 (flushAttributes): call outputBuilder.addAttribute for each attribute.
- *   Called from readOpeningTag AFTER matcher.updateCurrent(), so the read-only
- *   matcher already reflects the full attribute context when value parsers run.
- */
-function collectRawAttributes(attrStr, parser, rawAttributes) {
-  const matches = getAllMatches(attrStr, attrsRegx);
-  const len = matches.length;
-  for (let i = 0; i < len; i++) {
-    let attrName = parser.processAttrName(matches[i][1]);
-    if (attrName === false) continue;
-
-    const rawVal = matches[i][4];
-    const attrVal = rawVal !== undefined ? rawVal : true;
-
-    rawAttributes[matches[i][1]] = attrVal;
-  }
-}
-
-/**
- * Flush attributes to output builder.
- * @param {string} attrStr
- * @param {XMLParser} parser
- */
-export function flushAttributes(attrStr, parser) {
-  if (!attrStr || attrStr.length === 0) return;
-  const matches = getAllMatches(attrStr, attrsRegx);
-  const len = matches.length;
-
-  const maxAttrs = parser.options.limits?.maxAttributesPerTag;
-  if (maxAttrs !== undefined && maxAttrs !== null && len > maxAttrs) {
-    const tagName = parser.currentTagDetail?.name ?? '(unknown)';
-    throw new ParseError(
-      `Tag '${tagName}' has ${len} attributes, exceeding limit of ${maxAttrs}`,
-      ErrorCode.LIMIT_MAX_ATTRIBUTES,
-      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
-    );
-  }
-
-  for (let i = 0; i < len; i++) {
-    let attrName = parser.processAttrName(matches[i][1]);
-    if (attrName === false) continue;
-
-    const rawVal = matches[i][4];
-    const attrVal = rawVal !== undefined ? rawVal : true;
-
-    parser.outputBuilder.addAttribute(attrName, attrVal, parser.readonlyMatcher);
-  }
-}
-
-function parseAttributesExp(attrStr, parser, rawAttributes) {
-  collectRawAttributes(attrStr, parser, rawAttributes);
-}
-
-const getAllMatches = function (string, regex) {
-  const matches = [];
-  let match = regex.exec(string);
-  while (match) {
-    const allmatches = [];
-    allmatches.startIndex = regex.lastIndex - match[0].length;
-    const len = match.length;
-    for (let index = 0; index < len; index++) {
-      allmatches.push(match[index]);
-    }
-    matches.push(allmatches);
-    match = regex.exec(string);
-  }
-  return matches;
-};

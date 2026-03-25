@@ -49,6 +49,8 @@ export default class Xml2JsParser {
       ? new AutoCloseHandler(options.autoClose)
       : null;
 
+    this._unpairedSet = new Set(this.options.tags.unpaired);
+
     // Pre-compile stopNodes as Expression objects (tags.stopNodes).
     // Accepts both plain strings and already-compiled Expression instances.
     this.stopNodeExpressions = [];
@@ -64,7 +66,6 @@ export default class Xml2JsParser {
   initializeParser() {
     this.tagTextData = "";
     this.tagsStack = [];
-    this.currentTagDetail = { root: true, name: "" };
 
     if (!this.matcher) {
       this.matcher = new Matcher();
@@ -75,7 +76,6 @@ export default class Xml2JsParser {
 
     this.root = { root: true, name: "" };
     this.currentTagDetail = this.root;
-    this.initialized = true;
   }
 
   /**
@@ -96,6 +96,7 @@ export default class Xml2JsParser {
   parse(strData) {
     this.source = new StringSource(strData);
     this.entityParser.resetCounters();
+    this.initializeParser();
     this._parseAndFinalize();
     return this.outputBuilder.getOutput();
   }
@@ -103,6 +104,7 @@ export default class Xml2JsParser {
   parseBytesArr(data) {
     this.source = new BufferSource(data);
     this.entityParser.resetCounters();
+    this.initializeParser();
     this._parseAndFinalize();
     return this.outputBuilder.getOutput();
   }
@@ -116,13 +118,6 @@ export default class Xml2JsParser {
    * (used by parse() / parseBytesArr()) calls it then finalizeXml() immediately.
    */
   parseXml() {
-    if (!this.initialized) {
-      this.outputBuilder = this._createOutputBuilder();
-      this.root = { root: true, name: '' };
-      this.currentTagDetail = this.root;
-      this.entityParser.resetCounters();
-    }
-
     while (this.source.canRead()) {
       // Level-0 outer mark: set before consuming any character so that if a
       // '<' dispatch throws UNEXPECTED_END (chunk boundary mid-tag), feed()
@@ -230,9 +225,7 @@ export default class Xml2JsParser {
     }
 
     if (!this.currentTagDetail.root) this.addTextNode();
-    this.outputBuilder.closeTag(this.readonlyMatcher);
-    this.matcher.pop();
-    this.currentTagDetail = this.tagsStack.pop();
+    this.popTag();
   }
 
   readOpeningTag() {
@@ -269,16 +262,12 @@ export default class Xml2JsParser {
     //         which point the matcher already holds the full attribute context.
     const rawAttributes = tagExp.rawAttributes || {};
 
-    // Pass 1 already ran inside readTagExp (collected rawAttributes).
-    // Now push with empty attrs, then update matcher with all raw values so
-    // attribute-based stop-node expressions work before any value parsing.
     this.matcher.push(processedTagName, {});
     if (Object.keys(rawAttributes).length > 0) {
       this.matcher.updateCurrent(rawAttributes);
     }
 
     // Pass 2: run attribute value parsers now that matcher has full context.
-    // addAttribute() will see correct path + all sibling attributes via matcher.
     if (!this.options.skip.attributes) {
       flushAttributes(tagExp._attrsExp, this);
     }
@@ -299,10 +288,36 @@ export default class Xml2JsParser {
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
     } else {
-      this.tagsStack.push(this.currentTagDetail);
-      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
-      this.currentTagDetail = tagDetail;
+      this.pushTag(tagDetail);
     }
+  }
+
+  /**
+   * Push a tag onto the parser stack and notify the output builder.
+   * This is the single point of entry for opening a non-self-closing tag —
+   * both the parser-side stack (currentTagDetail / tagsStack) and the
+   * output builder are updated together, keeping them in sync.
+   *
+   * Custom OutputBuilder implementations that maintain their own tag stack
+   * should override addTag() rather than calling pushTag() directly.
+   *
+   * @param {TagDetail} tagDetail
+   */
+  pushTag(tagDetail) {
+    this.tagsStack.push(this.currentTagDetail);
+    this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+    this.currentTagDetail = tagDetail;
+  }
+
+  /**
+   * Pop the current tag from the parser stack and notify the output builder.
+   * This is the single point of exit for closing a tag — both stacks are
+   * updated together.
+   */
+  popTag() {
+    this.outputBuilder.closeTag(this.readonlyMatcher);
+    this.matcher.pop();
+    this.currentTagDetail = this.tagsStack.pop();
   }
 
   readSpecialTag(startCh) {
@@ -331,7 +346,7 @@ export default class Xml2JsParser {
     }
   }
 
-  addTextNode = function () {
+  addTextNode() {
     if (this.tagTextData !== undefined && this.tagTextData !== "") {
       if (this.tagTextData.trim().length > 0) {
         // Pass raw text — entity expansion is handled by 'entities' ValueParser in the chain
@@ -364,7 +379,7 @@ export default class Xml2JsParser {
   }
 
   isUnpaired(tagName) {
-    return this.options.tags.unpaired.indexOf(tagName) !== -1;
+    return this._unpairedSet.has(tagName);
   }
 
   isStopNode() {// TODO: check how number of calls to this function can be reduced
@@ -391,6 +406,7 @@ export default class Xml2JsParser {
       get tagTextData() { return self.tagTextData; },
       set tagTextData(v) { self.tagTextData = v; },
       addTextNode: self.addTextNode.bind(self),
+      popTag: self.popTag.bind(self),
     };
   }
 }

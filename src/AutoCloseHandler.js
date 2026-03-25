@@ -71,16 +71,11 @@ export default class AutoCloseHandler {
     }
 
     // onEof === 'closeAll'
-    // The parser's open-tag stack at EOF looks like:
-    //   tagsStack: [root-sentinel, ancestor1, ancestor2, ...]
-    //   currentTagDetail: the innermost open tag (not yet on tagsStack)
-    //
-    // We close from innermost outward, calling outputBuilder.closeTag() and
-    // matcher.pop() for each — exactly what readClosingTag() normally does.
+    // Close from innermost outward using the parser's canonical popTag(),
+    // which keeps the parser stack and output builder in sync automatically.
 
-    const { tagsStack, outputBuilder, readonlyMatcher, matcher, addTextNode } = parserState;
+    const { addTextNode, popTag } = parserState;
 
-    // currentTagDetail is the deepest open tag — close it first
     let current = parserState.currentTagDetail;
 
     while (current && !current.root) {
@@ -93,12 +88,10 @@ export default class AutoCloseHandler {
       });
 
       addTextNode();
-      outputBuilder.closeTag(readonlyMatcher);
-      matcher.pop();
+      popTag();
 
-      // Walk up the stack
-      current = tagsStack.pop() || null;
-      parserState.currentTagDetail = current;
+      // popTag() already updated currentTagDetail via tagsStack.pop()
+      current = parserState.currentTagDetail;
     }
   }
 
@@ -115,7 +108,7 @@ export default class AutoCloseHandler {
    * @returns {{ action: string }}
    */
   handleMismatch(closingTagName, parserState) {
-    const { tagsStack, currentTagDetail, outputBuilder, readonlyMatcher, source, addTextNode } = parserState;
+    const { tagsStack, currentTagDetail, source, addTextNode } = parserState;
 
     if (this.onMismatch === 'throw') {
       throw new ParseError(
@@ -181,12 +174,12 @@ export default class AutoCloseHandler {
       });
 
       addTextNode();
-      outputBuilder.closeTag(readonlyMatcher);
-      parserState.matcher.pop();
-      tagsStack.pop();
+      parserState.popTag();
     }
 
-    // Update currentTagDetail to the matched one so the normal close path works
+    // Update currentTagDetail to the matched one so the normal close path works.
+    // popTag() has already walked the stack up by levelsToClose steps; the next
+    // currentTagDetail is the one we want to match against.
     parserState.currentTagDetail = stackSnapshot[matchIndex];
 
     return { action: 'close-matched' };

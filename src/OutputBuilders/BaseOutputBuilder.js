@@ -92,7 +92,15 @@ export default class BaseOutputBuilder {
     }
   }
 
-  addRawValue = text => this.addValue(text);
+  /**
+   * Add raw text directly to the current tag's text value, bypassing any
+   * value-parser chain. Used by addCdata() when CDATA merges into tag text.
+   * Subclasses that override addValue() will have that override respected here
+   * because this is a regular prototype method, not an arrow function.
+   */
+  addRawValue(text) {
+    this.addValue(text);
+  }
 
   /**
    * Handle XML declaration (<?xml ... ?>).

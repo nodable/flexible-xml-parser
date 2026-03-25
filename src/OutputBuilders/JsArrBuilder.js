@@ -47,8 +47,6 @@ class JsArrBuilder extends BaseOutputBuilder {
   }
 
   addTag(tag, matcher) {
-    if (tag.name === "__proto__") tag.name = "#__proto__";
-    this.currentMatcher = matcher;
     this.tagsStack.push(this.currentNode);
     this.currentNode = new Node(tag.name, this.attributes);
     this.attributes = {};
@@ -84,7 +82,6 @@ class JsArrBuilder extends BaseOutputBuilder {
 
   addPi(name) {
     const node = new Node(name, this.attributes);
-    this.currentNode[":@"] = this.attributes;
     this.currentNode.child.push(node);
     this.attributes = {};
   }

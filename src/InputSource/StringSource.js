@@ -39,21 +39,30 @@ export default class StringSource {
     this.autoFlush = options.autoFlush !== false;
     this.flushThreshold = options.flushThreshold ?? 1024;
 
-    // Token-start checkpoint for mark/rewind (mirrors FeedableSource API).
-    this._tokenStart = -1;
+    // Two-level mark stack matching FeedableSource's API.
+    // _marks[0] = outer mark (parseXml loop), _marks[1] = inner mark (readers).
+    // -1 means "not set" for that level.
+    this._marks = [-1, -1];
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────
 
   /**
-   * Save the current read position as the start of a new logical token.
+   * Save the current read position into the two-level mark stack.
    *
-   * Called at the beginning of every reader function. For StringSource this
-   * primarily guards flush() from reclaiming data that is still being read,
-   * mirroring the same safety invariant as FeedableSource.
+   * Mirrors FeedableSource's two-level API so all reader functions work
+   * identically regardless of source type:
+   *
+   *   level 0 (default) — outer mark, set by parseXml()'s main loop.
+   *   level 1           — inner mark, set by individual reader functions.
+   *
+   * For StringSource the distinction only matters for flush() boundary
+   * calculations — rewindToMark() is always a no-op here.
+   *
+   * @param {0|1} [level=0]
    */
-  markTokenStart() {
-    this._tokenStart = this.startIndex;
+  markTokenStart(level = 0) {
+    this._marks[level] = this.startIndex;
   }
 
   /**
@@ -68,24 +77,30 @@ export default class StringSource {
     // No-op: the complete document is in memory; no rewind is ever needed.
   }
 
+  /** Clear both mark slots (mirrors FeedableSource.clearMark). */
+  clearMark() {
+    this._marks[0] = -1;
+    this._marks[1] = -1;
+  }
+
   /**
    * Discard the already-processed prefix of the buffer to free memory.
    *
-   * If a token checkpoint is active the flush origin is moved back to the
-   * checkpoint so the in-progress token is preserved. In normal operation
-   * updateBufferBoundary() suppresses autoFlush while a checkpoint is active,
-   * so this guard is a safety net for direct flush() calls.
+   * The flush origin is the minimum of all active mark positions so that any
+   * in-progress token (at either mark level) is preserved in the buffer.
+   * If no marks are active, the origin is startIndex itself.
    */
   flush() {
-    const origin = this._tokenStart >= 0 ? this._tokenStart : this.startIndex;
+    let origin = this.startIndex;
+    for (const m of this._marks) {
+      if (m >= 0 && m < origin) origin = m;
+    }
     if (origin > 0) {
       this.buffer = this.buffer.substring(origin);
-      if (this._tokenStart >= 0) {
-        this.startIndex -= origin;
-        this._tokenStart = 0;
-      } else {
-        this.startIndex = 0;
+      for (let i = 0; i < this._marks.length; i++) {
+        if (this._marks[i] >= 0) this._marks[i] -= origin;
       }
+      this.startIndex -= origin;
     }
   }
 
@@ -171,7 +186,8 @@ export default class StringSource {
    */
   updateBufferBoundary(n = 1) {
     this.startIndex += n;
-    if (this.autoFlush && this.startIndex >= this.flushThreshold && this._tokenStart < 0) {
+    const anyMarkActive = this._marks[0] >= 0 || this._marks[1] >= 0;
+    if (this.autoFlush && this.startIndex >= this.flushThreshold && !anyMarkActive) {
       this.flush();
     }
   }

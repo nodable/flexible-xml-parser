@@ -50,11 +50,6 @@ class JsObjBuilder extends BaseOutputBuilder {
   }
 
   addTag(tag, matcher) {
-    // Store the read-only matcher so addAttribute() can include it in context.
-    // This is the same proxy instance for the lifetime of the parse — it always
-    // reflects the current path state without allowing mutation.
-    this.currentMatcher = matcher;
-
     let value = "";
     if (!isEmpty(this.attributes)) {
       if (this.options.attributes.groupBy) {
@@ -64,6 +59,9 @@ class JsObjBuilder extends BaseOutputBuilder {
       }
     }
 
+    // Push current tag's value-tree state so closeTag() can restore it.
+    // tagName is included so the builder is self-contained — callers do not
+    // need to pass the name back in on close.
     this.tagsStack.push([this.tagName, this.textValue, this.value]);
     this.tagName = tag.name;
     this.value = value;
@@ -82,7 +80,7 @@ class JsObjBuilder extends BaseOutputBuilder {
       elementName: tagName,
       elementValue: textValue,
       elementType: ElementType.TAG,
-      matcher: matcher,   // read-only proxy
+      matcher: matcher,
       isLeafNode: isLeafNode,
     };
 
@@ -96,7 +94,6 @@ class JsObjBuilder extends BaseOutputBuilder {
     let resultTag = { tagName, value };
 
     if (this.options.onTagClose !== undefined) {
-      // Always pass the read-only matcher — never the mutable one
       resultTag = this.options.onTagClose(tagName, value, textValue, matcher);
       if (!resultTag) return;
     }
