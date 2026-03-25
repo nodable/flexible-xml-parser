@@ -87,4 +87,17 @@ describe("CDATA", function () {
     expect(result.root.script).toBe("");
   });
 
+  it("should join text without space by default", function () {
+    const parser = new XMLParser();
+    parser.feed(`<root><a><![CDATA[hel]]>`);
+    parser.feed(`<![CDATA[lo]]></a>`);
+    parser.feed(`<b>hel<![CDATA[lo`);
+    parser.feed(`]]></b>`);
+    parser.feed(`<c><![CDATA[hel]]>lo</c>`);
+    parser.feed(`</root>`);
+    const result = parser.end();
+    const expected = { root: { a: 'hello', b: 'hello', c: 'hello' } }
+    expect(result).toEqual(expected);
+  });
+
 });

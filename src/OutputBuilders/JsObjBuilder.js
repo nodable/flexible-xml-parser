@@ -36,6 +36,7 @@ class JsObjBuilder extends BaseOutputBuilder {
       nameFor: { ...builderOptions.nameFor, ...parserOptions.nameFor },
       tags: { ...builderOptions.tags, ...parserOptions.tags },
       attributes: { ...builderOptions.attributes, ...parserOptions.attributes },
+      textJoint: builderOptions.textJoint || "", // when text for a tag is combined from multiple text nodes
     };
 
     this.registeredParsers = registeredParsers;
@@ -135,7 +136,7 @@ class JsObjBuilder extends BaseOutputBuilder {
   }
 
   addValue(text, matcher) {
-    if (this.textValue.length > 0) this.textValue += " " + text;
+    if (this.textValue.length > 0) this.textValue += this.options.textJoint + text;
     else this.textValue = text;
   }
 

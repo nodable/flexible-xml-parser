@@ -135,6 +135,29 @@ export const defaultOptions = {
     maxAttributesPerTag: null,
   },
 
+  // --- feedable (feed/end and parseStream input options) ---
+  // Controls buffer behaviour for the FeedableSource and StreamSource.
+  //
+  //   maxBufferSize  — maximum number of characters allowed in the buffer at
+  //                    any one time.  Prevents memory exhaustion when a caller
+  //                    feeds data faster than it is consumed.
+  //                    Default: 10 MB (10 * 1024 * 1024 characters)
+  //
+  //   autoFlush      — when true (default), already-processed characters are
+  //                    automatically discarded from the front of the buffer
+  //                    whenever the processed portion exceeds flushThreshold.
+  //                    Keeps memory usage flat for large documents.
+  //
+  //   flushThreshold — number of processed characters that triggers an auto-
+  //                    flush.  Lower values free memory sooner but incur more
+  //                    string-slice operations.  Default: 1024 characters (1 KB)
+  //
+  feedable: {
+    maxBufferSize:  10 * 1024 * 1024,
+    autoFlush:      true,
+    flushThreshold: 1024,
+  },
+
   // --- output ---
   OutputBuilder: null,
 };

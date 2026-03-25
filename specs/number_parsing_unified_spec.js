@@ -192,7 +192,6 @@ describeAcrossAllInputSources("Advanced Number Parsing Scenarios", function (par
     `;
 
     const result = parse(xml, { numberParseOptions: { hex: true } });
-
     expect(result.data.int).toBe(42);
     expect(result.data.float).toBeCloseTo(3.14159, 5);
     expect(result.data.hex).toBe(3735928559);

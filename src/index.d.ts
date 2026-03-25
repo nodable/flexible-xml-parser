@@ -322,6 +322,34 @@ export interface ValueParser {
   parse(val: any, context?: { tagName: string; isAttribute: boolean; attrName?: string }): any;
 }
 
+/**
+ * Buffer options for the feed()/end() and parseStream() input APIs.
+ * Passed as `feedable` inside XMLParser options.
+ */
+export interface FeedableOptions {
+  /**
+   * Maximum number of characters allowed in the buffer at any one time.
+   * Prevents memory exhaustion when data is fed faster than it is consumed.
+   * Default: 10485760 (10 MB)
+   */
+  maxBufferSize?: number;
+
+  /**
+   * When true (default), already-processed characters are automatically
+   * discarded from the buffer once the processed portion exceeds
+   * flushThreshold.  Keeps memory usage flat for large documents.
+   * Default: true
+   */
+  autoFlush?: boolean;
+
+  /**
+   * Number of processed characters that triggers an automatic flush.
+   * Lower values free memory sooner at the cost of more string-slice
+   * operations.  Default: 1024 (1 KB)
+   */
+  flushThreshold?: number;
+}
+
 export interface X2jOptions {
   // --- node-type controls ---
   /** Fine-grained control over which node types appear in output */
@@ -375,6 +403,15 @@ export interface X2jOptions {
    */
   limits?: LimitsOptions | null;
 
+  // --- feedable (feed/end and parseStream buffer options) ---
+  /**
+   * Buffer behaviour for the FeedableSource (feed/end API) and StreamSource
+   * (parseStream API).  All properties have sensible defaults and only need
+   * to be set when processing very large documents or operating under tight
+   * memory constraints.
+   */
+  feedable?: FeedableOptions;
+
   // --- output builder ---
   /** Pluggable output builder instance. Default: JsObjBuilder */
   OutputBuilder?: OutputBuilderFactory | null;
@@ -419,10 +456,17 @@ export default class XMLParser {
   parseBytesArr(xmlData: Uint8Array | ArrayBufferView): any;
 
   /**
-   * Parse an XML readable stream to a JavaScript object.
-   * @throws {ParseError} with code `INVALID_STREAM` if the argument is not a readable stream.
+   * Parse an XML Node.js Readable stream and return a Promise that resolves
+   * with the parsed JS object.
+   *
+   * Chunks are processed incrementally as they arrive — already-consumed input
+   * is freed immediately, so memory stays proportional to the largest single
+   * token rather than the total document size.
+   *
+   * @throws {ParseError} with code `INVALID_STREAM` if the argument is not a
+   *   Node.js Readable stream.
    */
-  parseStream(xmlDataStream: NodeJS.ReadableStream): Promise<any>;
+  parseStream(readable: NodeJS.ReadableStream): Promise<any>;
 
   /**
    * Feed an XML data chunk for incremental parsing.
@@ -446,9 +490,6 @@ export default class XMLParser {
    * @example parser.addEntity('copy', '©');
    */
   addEntity(key: string, value: string): void;
-
-  /** Returns true when the parser is in incremental feed/end mode. */
-  isStreamingMode(): boolean;
 
   /**
    * Return structural errors collected during the last parse call.

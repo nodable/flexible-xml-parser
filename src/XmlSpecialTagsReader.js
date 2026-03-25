@@ -2,7 +2,22 @@ import { readPiExp, flushAttributes } from './XmlPartReader.js';
 import { ParseError, ErrorCode } from './ParseError.js';
 
 export function readCdata(parser) {
+  // Level-1 inner mark: records where this reader began, used only by flush()
+  // as a safe trim boundary. Does NOT overwrite the level-0 outer mark set by
+  // parseXml()'s loop before it consumed '<![', which rewindToMark() restores to.
+  parser.source.markTokenStart(1);
+
   //<![ already consumed up to this point
+  if (!parser.source.canRead(5)) {
+    // Fewer than 6 chars available — chunk boundary inside "CDATA[" preamble.
+    // Throw UNEXPECTED_END so feed() rewinds to the level-0 outer mark and
+    // retries the full '<![CDATA[' on the next chunk.
+    throw new ParseError(
+      `Unexpected end of source reading CDATA preamble`,
+      ErrorCode.UNEXPECTED_END,
+      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+    );
+  }
   let str = parser.source.readStr(6); // "CDATA["
   parser.source.updateBufferBoundary(6);
 
@@ -17,6 +32,7 @@ export function readCdata(parser) {
 }
 
 export function readPiTag(parser) {
+  parser.source.markTokenStart(1);
   //<? already consumed
   let tagExp = readPiExp(parser, "?>");
   if (!tagExp) throw new ParseError(
@@ -44,7 +60,15 @@ export function readPiTag(parser) {
 }
 
 export function readComment(parser) {
+  parser.source.markTokenStart(1);
   //<!- already consumed
+  if (!parser.source.canRead()) {
+    throw new ParseError(
+      `Unexpected end of source reading comment`,
+      ErrorCode.UNEXPECTED_END,
+      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+    );
+  }
   let ch = parser.source.readCh();
   if (ch !== "-") throw new ParseError(
     `Invalid comment expression at ${parser.source.line}:${parser.source.cols}`,

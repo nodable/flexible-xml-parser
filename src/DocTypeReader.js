@@ -2,7 +2,17 @@ import { isName } from './util.js';
 import { ParseError, ErrorCode } from './ParseError.js';
 
 export function readDocType(parser) {
+    parser.source.markTokenStart();
+
     // <!D are already consumed by the caller up to this point
+    if (!parser.source.canRead(5)) {
+        // Fewer than 6 chars available — chunk boundary inside "OCTYPE" preamble.
+        throw new ParseError(
+            `Unexpected end of source reading DOCTYPE preamble`,
+            ErrorCode.UNEXPECTED_END,
+            { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+        );
+    }
     let str = parser.source.readStr(6); // "OCTYPE"
     parser.source.updateBufferBoundary(6);
 

@@ -52,17 +52,20 @@ export function readStopNode(xmlDoc, tagName, i) {
 }
 
 /**
- * Read closing tag name
+ * Read closing tag name.
+ *
+ * Uses level-1 (inner) mark so flush() knows the safe trim boundary while
+ * this reader is in progress. Does NOT overwrite the level-0 outer mark set
+ * by parseXml()'s loop, which rewindToMark() always restores to.
+ *
  * @param {Source} source
- * @returns tag name
+ * @returns {string} tag name
  */
 export function readClosingTagName(source) {
-  let text = ""; //temporary data
+  source.markTokenStart(1);
+  let text = "";
   while (source.canRead()) {
     let ch = source.readCh();
-    // if (ch === null || ch === undefined) break;
-    // source.updateBuffer();
-
     if (ch === ">") return text.trimEnd();
     else text += ch;
   }
@@ -70,15 +73,18 @@ export function readClosingTagName(source) {
 }
 
 /**
- * Read XML tag and build attributes map
+ * Read XML tag and build attributes map.
  * This function can be used to read normal tag, pi tag.
  * This function can't be used to read comment, CDATA, DOCTYPE.
  * Eg <tag attr = ' some"' attr= ">" bool>
- * @param {string} xmlDoc
- * @param {number} startIndex starting index
+ *
+ * Uses level-1 (inner) mark — see readClosingTagName for rationale.
+ *
+ * @param {object} parser
  * @returns tag expression includes tag name & attribute string
  */
 export function readTagExp(parser) {
+  parser.source.markTokenStart(1);
   let inSingleQuotes = false;
   let inDoubleQuotes = false;
   let i;
@@ -92,16 +98,22 @@ export function readTagExp(parser) {
     } else if (char === '"' && !inSingleQuotes) {
       inDoubleQuotes = !inDoubleQuotes;
     } else if (char === '>' && !inSingleQuotes && !inDoubleQuotes) {
-      // If not inside quotes, stop reading at '>'
       EOE = true;
       break;
     }
-
   }
-  if (inSingleQuotes || inDoubleQuotes) {
+  if (!EOE) {
+    // Buffer exhausted before '>' was found. If we were inside a quoted value,
+    // this is a chunk boundary mid-attribute (e.g. id="hello| |world") — not a
+    // syntax error. Throw UNEXPECTED_END so feed()/parseStream() rewinds to the
+    // level-0 outer mark and retries the full tag on the next chunk.
+    // UNCLOSED_QUOTE is only correct when '>' was found while quotes were still
+    // open, which is a genuine XML syntax error.
+    throw new ParseError("Unexpected closing of source waiting for '>'", ErrorCode.UNEXPECTED_END);
+  } else if (inSingleQuotes || inDoubleQuotes) {
+    // '>' found but a quote was never closed — real syntax error.
     throw new ParseError("Invalid attribute expression. Quote is not properly closed", ErrorCode.UNCLOSED_QUOTE);
-  } else if (!EOE) throw new ParseError("Unexpected closing of source waiting for '>'", ErrorCode.UNEXPECTED_END);
-
+  }
 
   const exp = parser.source.readStr(i);
   parser.source.updateBufferBoundary(i + 1);
@@ -109,6 +121,7 @@ export function readTagExp(parser) {
 }
 
 export function readPiExp(parser) {
+  parser.source.markTokenStart(1);
   let inSingleQuotes = false;
   let inDoubleQuotes = false;
   let i;
@@ -127,13 +140,17 @@ export function readPiExp(parser) {
     if (!inSingleQuotes && !inDoubleQuotes) {
       if (currentChar === '?' && nextChar === '>') {
         EOE = true;
-        break; // Exit the loop when '?>' is found
+        break;
       }
     }
   }
-  if (inSingleQuotes || inDoubleQuotes) {
+  if (!EOE) {
+    // Buffer exhausted before '?>' — chunk boundary mid-PI-tag.
+    throw new ParseError("Unexpected closing of source waiting for '?>'", ErrorCode.UNEXPECTED_END);
+  } else if (inSingleQuotes || inDoubleQuotes) {
+    // '?>' found but a quote was never closed — real syntax error.
     throw new ParseError("Invalid attribute expression. Quote is not properly closed in PI tag expression", ErrorCode.UNCLOSED_QUOTE);
-  } else if (!EOE) throw new ParseError("Unexpected closing of source waiting for '?>'", ErrorCode.UNEXPECTED_END);
+  }
 
   if (!parser.options.skip.attributes) {
     //TODO: use regex to verify attributes if not set to ignore
@@ -148,8 +165,8 @@ function buildTagExpObj(exp, parser) {
   const tagExp = {
     tagName: "",
     selfClosing: false,
-    rawAttributes: Object.create(null), // null-prototype map: safe for untrusted attribute names
-    _attrsExp: "",  // stored for two-pass attribute flushing in readOpeningTag
+    rawAttributes: Object.create(null),
+    _attrsExp: "", // stored for two-pass attribute flushing in readOpeningTag
   };
   let attrsExp = "";
 
@@ -201,27 +218,25 @@ function collectRawAttributes(attrStr, parser, rawAttributes) {
   const len = matches.length;
   for (let i = 0; i < len; i++) {
     let attrName = parser.processAttrName(matches[i][1]);
-    if (attrName === false) continue; // Skip xmlns etc.
+    if (attrName === false) continue;
 
     const rawVal = matches[i][4];
     const attrVal = rawVal !== undefined ? rawVal : true;
 
-    // Store by original (un-processed) name so matcher.getAttrValue() works.
     rawAttributes[matches[i][1]] = attrVal;
   }
 }
 
 /**
- * Flush attributes to output builder
- * @param {string} attrStr 
- * @param {XMLParser} parser 
+ * Flush attributes to output builder.
+ * @param {string} attrStr
+ * @param {XMLParser} parser
  */
 export function flushAttributes(attrStr, parser) {
   if (!attrStr || attrStr.length === 0) return;
   const matches = getAllMatches(attrStr, attrsRegx);
   const len = matches.length;
 
-  // ── Limit: maxAttributesPerTag ───────────────────────────────────────────
   const maxAttrs = parser.options.limits?.maxAttributesPerTag;
   if (maxAttrs !== undefined && maxAttrs !== null && len > maxAttrs) {
     const tagName = parser.currentTagDetail?.name ?? '(unknown)';
@@ -239,16 +254,13 @@ export function flushAttributes(attrStr, parser) {
     const rawVal = matches[i][4];
     const attrVal = rawVal !== undefined ? rawVal : true;
 
-    // Matcher is now fully updated — value parsers see the complete attribute context.
     parser.outputBuilder.addAttribute(attrName, attrVal, parser.readonlyMatcher);
   }
 }
 
-// Keep internal alias used by buildTagExpObj
 function parseAttributesExp(attrStr, parser, rawAttributes) {
   collectRawAttributes(attrStr, parser, rawAttributes);
 }
-
 
 const getAllMatches = function (string, regex) {
   const matches = [];

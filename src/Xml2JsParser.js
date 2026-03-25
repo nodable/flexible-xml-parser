@@ -96,17 +96,25 @@ export default class Xml2JsParser {
   parse(strData) {
     this.source = new StringSource(strData);
     this.entityParser.resetCounters();
-    this.parseXml();
+    this._parseAndFinalize();
     return this.outputBuilder.getOutput();
   }
 
   parseBytesArr(data) {
     this.source = new BufferSource(data);
     this.entityParser.resetCounters();
-    this.parseXml();
+    this._parseAndFinalize();
     return this.outputBuilder.getOutput();
   }
 
+  /**
+   * Advance the parser state machine as far as the source buffer allows.
+   * Stops naturally when canRead() returns false — no EOF handling here.
+   * Call finalizeXml() once all input is consumed to validate end-of-document.
+   *
+   * parseStream() and feed()/end() call this per chunk; _parseAndFinalize()
+   * (used by parse() / parseBytesArr()) calls it then finalizeXml() immediately.
+   */
   parseXml() {
     if (!this.initialized) {
       this.outputBuilder = this._createOutputBuilder();
@@ -115,68 +123,88 @@ export default class Xml2JsParser {
       this.entityParser.resetCounters();
     }
 
-    // Reset error log for this parse run
+    while (this.source.canRead()) {
+      // Level-0 outer mark: set before consuming any character so that if a
+      // '<' dispatch throws UNEXPECTED_END (chunk boundary mid-tag), feed()
+      // rewinds to here and the full token — including '<', '![', '</' etc. —
+      // is re-read on the next chunk. Inner reader functions use level-1 marks
+      // which never overwrite this position.
+      this.source.markTokenStart(0);
+
+      const ch = this.source.readCh();
+      if (ch === undefined || ch === '') break;
+
+      if (ch === '<') {
+        const nextChar = this.source.readChAt(0);
+        if (nextChar === '') throw new ParseError(
+          "Unexpected end of source after '<'",
+          ErrorCode.UNEXPECTED_END,
+          { line: this.source.line, col: this.source.cols, index: this.source.startIndex }
+        );
+
+        if (nextChar === '!' || nextChar === '?') {
+          this.source.updateBufferBoundary();
+          this.addTextNode();
+          this.readSpecialTag(nextChar);
+        } else if (nextChar === '/') {
+          this.source.updateBufferBoundary();
+          this.readClosingTag();
+        } else {
+          this.readOpeningTag();
+        }
+      } else {
+        this.tagTextData += ch;
+      }
+    }
+  }
+
+  /**
+   * Validate end-of-document state and apply autoClose recovery if configured.
+   * Must be called exactly once after all input has been consumed.
+   */
+  finalizeXml() {
+    const hasOpenTags = this.tagsStack.length > 0 ||
+      (this.currentTagDetail && !this.currentTagDetail.root);
+
+    const hasTrailingText =
+      !hasOpenTags &&
+      this.tagTextData !== undefined &&
+      this.tagTextData.trimEnd().length > 0;
+
+    if (hasOpenTags || hasTrailingText) {
+      if (this.autoCloseHandler && hasOpenTags && !hasTrailingText) {
+        this.autoCloseHandler.handleEof(this._parserState());
+      } else {
+        throw new ParseError('Unexpected data in the end of document', ErrorCode.UNEXPECTED_TRAILING_DATA);
+      }
+    }
+  }
+
+  /**
+   * One-shot helper used by parse() and parseBytesArr().
+   * Runs parseXml() with autoClose partial-tag recovery, then finalizeXml().
+   * @private
+   */
+  _parseAndFinalize() {
+    let partialTagError = null;
     if (this.autoCloseHandler) this.autoCloseHandler.reset();
 
-    let partialTagError = null;
-
     try {
-      while (this.source.canRead()) {
-        let ch = this.source.readCh();
-        if (ch === undefined || ch === "") break;
-
-        if (ch === "<") {
-          let nextChar = this.source.readChAt(0);
-          if (nextChar === "") throw new ParseError("Unexpected end of source after '<'", ErrorCode.UNEXPECTED_END, { line: this.source.line, col: this.source.cols, index: this.source.startIndex });
-
-          if (nextChar === "!" || nextChar === "?") {
-            this.source.updateBufferBoundary();
-            this.addTextNode();
-            this.readSpecialTag(nextChar);
-          } else if (nextChar === "/") {
-            this.source.updateBufferBoundary();
-            this.readClosingTag();
-          } else {
-            this.readOpeningTag();
-          }
-        } else {
-          this.tagTextData += ch;
-        }
-      }
+      this.parseXml();
     } catch (err) {
       if (this.autoCloseHandler && isSourceExhaustedError(err)) {
-        // Source ran out mid-tag (e.g. `<div><p` or `</di`).
-        // Record it and fall through to the EOF handler below.
         partialTagError = err;
       } else {
         throw err;
       }
     }
 
-    const hasOpenTags = this.tagsStack.length > 0 ||
-      (this.currentTagDetail && !this.currentTagDetail.root);
-
-    // hasTrailingText: text genuinely outside all tags (e.g. stray text after root closes).
-    // Text inside an unclosed tag is fine — handleEof's addTextNode() will flush it.
-    // Partial-tag errors also leave fragment chars in tagTextData — ignore those too.
-    const hasTrailingText = !partialTagError &&
-      !hasOpenTags &&
-      this.tagTextData !== undefined &&
-      this.tagTextData.trimEnd().length > 0;
-
-    if (partialTagError || hasOpenTags || hasTrailingText) {
-      // Recoverable when autoClose is active AND the problem is a partial/unclosed tag,
-      // NOT stray text floating outside all tags (which is always a hard error).
-      if (this.autoCloseHandler && (partialTagError || hasOpenTags) && !hasTrailingText) {
-        if (partialTagError) {
-          this.autoCloseHandler.handlePartialTag(partialTagError, this._parserState());
-        } else {
-          this.autoCloseHandler.handleEof(this._parserState());
-        }
-      } else {
-        throw new ParseError('Unexpected data in the end of document', ErrorCode.UNEXPECTED_TRAILING_DATA);
-      }
+    if (partialTagError) {
+      this.autoCloseHandler.handlePartialTag(partialTagError, this._parserState());
+      return;
     }
+
+    this.finalizeXml();
   }
 
   readClosingTag() {
@@ -206,8 +234,6 @@ export default class Xml2JsParser {
     this.matcher.pop();
     this.currentTagDetail = this.tagsStack.pop();
   }
-
-  // Remove the separate validateClosingTag — logic is now inline above.
 
   readOpeningTag() {
     this.addTextNode();
