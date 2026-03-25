@@ -238,7 +238,7 @@ export default class Xml2JsParser {
   readOpeningTag() {
     this.addTextNode();
 
-    let tagExp = readTagExp(this, ">");
+    let tagExp = readTagExp(this);
     const processedTagName = this.processTagName(tagExp.tagName);
     const tagDetail = new TagDetail(
       processedTagName,
@@ -367,7 +367,7 @@ export default class Xml2JsParser {
     return this.options.tags.unpaired.indexOf(tagName) !== -1;
   }
 
-  isStopNode() {
+  isStopNode() {// TODO: check how number of calls to this function can be reduced
     for (const expr of this.stopNodeExpressions) {
       if (this.matcher.matches(expr)) return true;
     }

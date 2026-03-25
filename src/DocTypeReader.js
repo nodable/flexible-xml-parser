@@ -2,7 +2,7 @@ import { isName } from './util.js';
 import { ParseError, ErrorCode } from './ParseError.js';
 
 export function readDocType(parser) {
-    parser.source.markTokenStart();
+    parser.source.markTokenStart(1);
 
     // <!D are already consumed by the caller up to this point
     if (!parser.source.canRead(5)) {
