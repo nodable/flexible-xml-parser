@@ -6,59 +6,6 @@ import { collectRawAttributes } from './AttributeProcessor.js';
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
 
-
-//TODO: below code is not as per new APIs, need to refactor
-//TODO: check how stopNode functionalitiy is behaving for cases of quotes, comment, cdata etc as handled in this method
-// /**
-//  * find paired tag for a stop node
-//  * @param {string} xmlDoc
-//  * @param {string} tagName
-//  * @param {number} i : start index
-//  */
-// export function readStopNode(xmlDoc, tagName, i) {
-//   const startIndex = i;
-//   // Starting at 1 since we already have an open tag
-//   let openTagCount = 1;
-
-//   for (; i < xmlDoc.length; i++) {
-//     if (xmlDoc[i] === "<") {
-//       if (xmlDoc[i + 1] === "/") {//close tag
-//         const closeIndex = findSubStrIndex(xmlDoc, ">", i, `${tagName} is not closed`);
-//         let closeTagName = xmlDoc.substring(i + 2, closeIndex).trim();
-//         if (closeTagName === tagName) {
-//           openTagCount--;
-//           if (openTagCount === 0) {
-//             return {
-//               tagContent: xmlDoc.substring(startIndex, i),
-//               i: closeIndex
-//             }
-//           }
-//         }
-//         i = closeIndex;
-//       } else if (xmlDoc[i + 1] === '?') {
-//         const closeIndex = findSubStrIndex(xmlDoc, "?>", i + 1, "StopNode is not closed.")
-//         i = closeIndex;
-//       } else if (xmlDoc.substr(i + 1, 3) === '!--') {
-//         const closeIndex = findSubStrIndex(xmlDoc, "-->", i + 3, "StopNode is not closed.")
-//         i = closeIndex;
-//       } else if (xmlDoc.substr(i + 1, 2) === '![') {
-//         const closeIndex = findSubStrIndex(xmlDoc, "]]>", i, "StopNode is not closed.") - 2;
-//         i = closeIndex;
-//       } else {
-//         const tagData = readTagExp(xmlDoc, i, '>')
-
-//         if (tagData) {
-//           const openTagName = tagData && tagData.tagName;
-//           if (openTagName === tagName && tagData.tagExp[tagData.tagExp.length - 1] !== "/") {
-//             openTagCount++;
-//           }
-//           i = tagData.closeIndex;
-//         }
-//       }
-//     }
-//   }//end for loop
-// }
-
 /**
  * Read closing tag name.
  *

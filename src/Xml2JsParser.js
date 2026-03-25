@@ -1,6 +1,7 @@
 import StringSource from './InputSource/StringSource.js';
 import BufferSource from './InputSource/BufferSource.js';
 import { readTagExp, readClosingTagName, flushAttributes } from './XmlPartReader.js';
+import { StopNodeReader } from './StopNodeReader.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
 import { Expression, Matcher } from 'path-expression-matcher';
 import EntitiesParser from './EntitiesParser.js';
@@ -66,6 +67,7 @@ export default class Xml2JsParser {
   initializeParser() {
     this.tagTextData = "";
     this.tagsStack = [];
+    this._stopNodeReader = null;
 
     if (!this.matcher) {
       this.matcher = new Matcher();
@@ -231,6 +233,26 @@ export default class Xml2JsParser {
   readOpeningTag() {
     this.addTextNode();
 
+    // ── Stop-node resume ─────────────────────────────────────────────────────
+    // When a chunk boundary fell inside StopNodeReader.collect(), feed() caught
+    // UNEXPECTED_END and rewound the source to the '<' of the stop node's
+    // opening tag. On the next feed() we re-enter here with the reader active.
+    // Re-consume the opening tag (source was rewound to its '<'), then resume
+    // collection — the reader remembers all accumulated content and depth.
+    if (this._stopNodeReader && this._stopNodeReader.isActive()) {
+      const { tagDetail } = this._stopNodeReaderMeta;
+      this._stopNodeReader.resumeAfterOpenTag();
+      readTagExp(this); // re-consume the opening tag from the rewound source
+      const content = this._stopNodeReader.collect(this.source);
+      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.addValue(content, this.readonlyMatcher);
+      this.outputBuilder.closeTag(this.readonlyMatcher);
+      this.matcher.pop();
+      this._stopNodeReader = null;
+      this._stopNodeReaderMeta = null;
+      return;
+    }
+
     let tagExp = readTagExp(this);
     const processedTagName = this.processTagName(tagExp.tagName);
     const tagDetail = new TagDetail(
@@ -282,11 +304,17 @@ export default class Xml2JsParser {
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
     } else if (this.isStopNode()) {
-      const content = this.source.readUptoCloseTag(`</${processedTagName}`);
+      // First encounter: create a fresh reader, activate it, collect content.
+      this._stopNodeReader = new StopNodeReader(processedTagName);
+      this._stopNodeReaderMeta = { tagDetail };
+      this._stopNodeReader.activate();
+      const content = this._stopNodeReader.collect(this.source);
       this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
+      this._stopNodeReader = null;
+      this._stopNodeReaderMeta = null;
     } else {
       this.pushTag(tagDetail);
     }
