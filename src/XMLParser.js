@@ -181,9 +181,17 @@ export default class XMLParser {
    * Signal end of input, validate end-of-document state, and return the
    * parsed result. Throws if called before any feed() call.
    *
-   * parseXml() is NOT called here — it ran (incrementally) inside each
-   * feed() call. This method only finalises: checks for unclosed tags,
-   * applies autoClose recovery if configured, and returns the output.
+   * parseXml() is called one final time after marking the source complete.
+   * This replays any bytes that were rewound during the last feed() call
+   * (e.g. a tag that was split across the final chunk boundary). Now that
+   * isComplete is true, any UNEXPECTED_END thrown by a reader means the
+   * document is genuinely truncated — not a chunk boundary — so it is
+   * treated as a real parse error rather than silently swallowed.
+   *
+   * autoClose partial-tag recovery works the same way it does in
+   * _parseAndFinalize(): if autoCloseHandler is configured and parseXml()
+   * throws UNEXPECTED_END, the handler is given a chance to recover before
+   * finalizeXml() runs.
    *
    * @returns {any}
    */
@@ -193,9 +201,40 @@ export default class XMLParser {
     }
 
     try {
+      // Mark the source as complete so readers know there is no more data.
       this._feedSource.end();
-      this._feedParser.finalizeXml();
-      this._lastParseErrors = this._feedParser.autoCloseHandler?.getErrors() ?? [];
+
+      // Replay any bytes rewound during the last feed() call (e.g. an
+      // incomplete tag at the very end of the input stream). Any
+      // UNEXPECTED_END thrown here is a genuine truncation error.
+      let partialTagError = null;
+      const autoClose = this._feedParser.autoCloseHandler;
+      if (autoClose) autoClose.reset();
+
+      try {
+        this._feedParser.parseXml();
+      } catch (err) {
+        if (err.code === ErrorCode.UNEXPECTED_END) {
+          if (autoClose) {
+            // autoClose recovery: treat the truncated tag the same way
+            // _parseAndFinalize() does for the one-shot parse path.
+            partialTagError = err;
+          } else {
+            // No recovery configured — truncated document is a hard error.
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      if (partialTagError) {
+        autoClose.handlePartialTag(partialTagError, this._feedParser._parserState());
+      } else {
+        this._feedParser.finalizeXml();
+      }
+
+      this._lastParseErrors = autoClose?.getErrors() ?? [];
       return this._feedParser.outputBuilder.getOutput();
     } finally {
       this._cleanupFeedSession();
