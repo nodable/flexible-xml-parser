@@ -52,6 +52,20 @@ class JsArrBuilder extends BaseOutputBuilder {
     this.attributes = {};
   }
 
+  /**
+   * Called when a stop node is fully collected, before `addValue`.
+   * Fires the user-supplied `onStopNode` callback if one is configured.
+   *
+   * @param {TagDetail} tagDetail  - Name, line, col, index of the stop node.
+   * @param {string}    rawContent - Raw unparsed content between the tags.
+   * @param {ReadonlyMatcher} matcher - Read-only path matcher for the stop node.
+   */
+  onStopNode(tagDetail, rawContent, matcher) {
+    if (typeof this.options.onStopNode === 'function') {
+      this.options.onStopNode(tagDetail, rawContent, matcher);
+    }
+  }
+
   closeTag(matcher) {
     const node = this.currentNode;
     this.currentNode = this.tagsStack.pop();

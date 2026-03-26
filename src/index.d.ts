@@ -59,14 +59,76 @@ export interface AttributeOptions {
   valueParsers?: Array<string | ValueParser>;
 }
 
+/**
+ * An open/close pair that defines a region the stop-node processor should skip
+ * when scanning for the closing tag. Anything between `open` and `close` is
+ * treated as opaque text — closing-tag detection and depth tracking are
+ * suspended until `close` is found.
+ *
+ * @example
+ * { open: '<!--', close: '-->' }   // XML comment
+ * { open: '"',    close: '"'  }    // double-quoted string
+ */
+export interface Enclosure {
+  open: string;
+  close: string;
+}
+
+/**
+ * Object form of a stop-node entry — allows per-node control of which
+ * enclosures the processor should skip when scanning for the closing tag.
+ *
+ * ```ts
+ * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+ *
+ * const parser = new XMLParser({
+ *   tags: {
+ *     stopNodes: [
+ *       "..script",                                              // plain — no enclosures
+ *       { expression: "body..pre",   skipEnclosures: [...xmlEnclosures] },
+ *       { expression: "head..style", skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] },
+ *     ]
+ *   }
+ * });
+ * ```
+ */
+export interface StopNodeEntry {
+  /** Path expression (same syntax as string stop-node entries). */
+  expression: string;
+  /**
+   * Enclosure pairs to skip while scanning for the closing tag.
+   * Checked in array order — first open match wins.
+   * Defaults to `[]` (plain first-match, no depth tracking).
+   */
+  skipEnclosures: Enclosure[];
+}
+
 export interface TagOptions {
   /** Tags that never have a closing tag (e.g. ['br', 'img', 'hr']). Default: [] */
   unpaired?: string[];
   /**
-   * Tag paths whose content is captured raw without further parsing.
+   * Tag paths whose content is captured raw without further XML parsing.
+   *
+   * Each entry is either:
+   *   - A plain string path expression — equivalent to `{ expression, skipEnclosures: [] }`.
+   *     The very first `</tagName>` ends collection (no depth tracking, no enclosure skipping).
+   *   - A `StopNodeEntry` object with an explicit `skipEnclosures` array.
+   *     When `skipEnclosures` is non-empty, depth tracking is enabled and anything
+   *     between an enclosure's open/close markers is skipped (so false closing tags
+   *     inside comments, CDATA, string literals, etc. are ignored).
+   *
    * Supports path-expression-matcher syntax. Default: []
+   *
+   * @example
+   * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+   *
+   * stopNodes: [
+   *   "..script",                                              // plain
+   *   { expression: "body..pre",   skipEnclosures: [...xmlEnclosures] },
+   *   { expression: "head..style", skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] },
+   * ]
    */
-  stopNodes?: string[];
+  stopNodes?: Array<string | StopNodeEntry>;
   /**
    * Value parser chain for tag text content.
    * Built-in names: 'replaceEntities', 'boolean', 'number', 'trim', 'currency'.
@@ -415,6 +477,36 @@ export interface X2jOptions {
   // --- output builder ---
   /** Pluggable output builder instance. Default: JsObjBuilder */
   OutputBuilder?: OutputBuilderFactory | null;
+
+  /**
+   * Callback fired by `JsArrBuilder` and `JsObjBuilder` whenever a stop node
+   * is fully collected, before the raw content is added to the output tree.
+   *
+   * Receive the tag detail, the raw unparsed content, and a read-only path
+   * matcher. Useful for side-channel analysis (e.g. extracting script content
+   * from HTML) without having to post-process the output tree.
+   *
+   * The callback is informational — return value is ignored. To suppress the
+   * node from output, use a custom OutputBuilder subclass instead.
+   *
+   * @param tagDetail  - `{ name, line, col, index }` of the stop-node opening tag.
+   * @param rawContent - Raw text content between the opening and closing tags.
+   * @param matcher    - Read-only path matcher positioned at the stop node.
+   *
+   * @example
+   * const scripts: string[] = [];
+   * const parser = new XMLParser({
+   *   tags: { stopNodes: ["..script"] },
+   *   onStopNode(tagDetail, rawContent, matcher) {
+   *     scripts.push(rawContent);
+   *   }
+   * });
+   */
+  onStopNode?: (
+    tagDetail: { name: string; line: number; col: number; index: number },
+    rawContent: string,
+    matcher: any,
+  ) => void;
 }
 
 export interface OutputBuilderFactory {
@@ -433,6 +525,17 @@ export interface OutputBuilderInstance {
   addPi(name: string): void;
   getOutput(): any;
   registeredParsers: Record<string, ValueParser>;
+  /**
+   * Optional hook called by the parser when a stop node is fully collected.
+   * Implement this in custom OutputBuilder classes to handle stop-node content.
+   * `JsArrBuilder` and `JsObjBuilder` implement it and delegate to the
+   * `options.onStopNode` callback when supplied.
+   */
+  onStopNode?(
+    tagDetail: { name: string; line: number; col: number; index: number },
+    rawContent: string,
+    matcher: any,
+  ): void;
 }
 
 export default class XMLParser {
@@ -525,3 +628,45 @@ export class JsMinArrBuilder implements OutputBuilderFactory {
   getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
   registerValueParser(name: string, parser: ValueParser): void;
 }
+
+// ─── Stop-node utilities ───────────────────────────────────────────────────────
+
+/**
+ * XML structural enclosures — comments, CDATA sections, processing instructions.
+ *
+ * Use in `skipEnclosures` to prevent false closing-tag matches inside these
+ * XML constructs:
+ *
+ * ```ts
+ * { expression: "body..pre", skipEnclosures: [...xmlEnclosures] }
+ * ```
+ */
+export declare const xmlEnclosures: ReadonlyArray<Enclosure>;
+
+/**
+ * String-literal enclosures — single-quote, double-quote, and template literals.
+ *
+ * Use in `skipEnclosures` for stop nodes that contain JS or CSS source code
+ * where closing tags might appear inside string literals:
+ *
+ * ```ts
+ * { expression: "head..style", skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] }
+ * ```
+ */
+export declare const quoteEnclosures: ReadonlyArray<Enclosure>;
+
+/**
+ * Low-level stop-node content processor. Exported for advanced use cases
+ * (e.g. custom OutputBuilder implementations that need to replay stop-node
+ * collection with custom enclosure rules).
+ *
+ * Most users interact with this indirectly through `tags.stopNodes`.
+ */
+export declare class StopNodeProcessor {
+  constructor(tagName: string, skipEnclosures?: Enclosure[]);
+  isActive(): boolean;
+  activate(): void;
+  resumeAfterOpenTag(): void;
+  collect(source: any): string;
+}
+

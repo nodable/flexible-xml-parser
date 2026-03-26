@@ -16,3 +16,6 @@ export { default as currencyParser } from './ValueParsers/currency.js';
 // Error handling
 export { ParseError, ErrorCode } from './ParseError.js';
 
+// Stop-node utilities
+export { StopNodeProcessor, xmlEnclosures, quoteEnclosures } from './StopNodeProcessor.js';
+

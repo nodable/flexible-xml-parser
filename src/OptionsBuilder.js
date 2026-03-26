@@ -153,8 +153,8 @@ export const defaultOptions = {
   //                    string-slice operations.  Default: 1024 characters (1 KB)
   //
   feedable: {
-    maxBufferSize:  10 * 1024 * 1024,
-    autoFlush:      true,
+    maxBufferSize: 10 * 1024 * 1024,
+    autoFlush: true,
     flushThreshold: 1024,
   },
 
@@ -192,11 +192,11 @@ export const buildOptions = function (options) {
       }
       const { maxNestedTags, maxAttributesPerTag } = options.limits;
       if (maxNestedTags !== undefined && maxNestedTags !== null &&
-          (typeof maxNestedTags !== 'number' || !Number.isInteger(maxNestedTags) || maxNestedTags < 1)) {
+        (typeof maxNestedTags !== 'number' || !Number.isInteger(maxNestedTags) || maxNestedTags < 1)) {
         throw new ParseError(`'limits.maxNestedTags' must be a positive integer, got ${maxNestedTags}`, ErrorCode.INVALID_INPUT);
       }
       if (maxAttributesPerTag !== undefined && maxAttributesPerTag !== null &&
-          (typeof maxAttributesPerTag !== 'number' || !Number.isInteger(maxAttributesPerTag) || maxAttributesPerTag < 0)) {
+        (typeof maxAttributesPerTag !== 'number' || !Number.isInteger(maxAttributesPerTag) || maxAttributesPerTag < 0)) {
         throw new ParseError(`'limits.maxAttributesPerTag' must be a non-negative integer, got ${maxAttributesPerTag}`, ErrorCode.INVALID_INPUT);
       }
     }
@@ -210,6 +210,47 @@ export const buildOptions = function (options) {
 
   if (!finalOptions.OutputBuilder) {
     finalOptions.OutputBuilder = new JsObjOutputBuilder();
+  }
+
+  // Normalize stopNodes entries into { expression, skipEnclosures } objects.
+  //
+  // Accepted forms:
+  //   "..script"                         string  → { expression, skipEnclosures: [] }
+  //   new Expression("..script")          object  → { expression, skipEnclosures: [] }
+  //   { expression, skipEnclosures }      object  → as-is (skipEnclosures defaults to [])
+  //
+  // Plain string and Expression entries use skipEnclosures: [] (plain/firstMatch mode):
+  // the very first </tagName> ends collection with no depth tracking.
+  // Use an explicit object entry with skipEnclosures: [...xmlEnclosures] to enable
+  // comment/CDATA/PI skipping and depth tracking.
+  if (Array.isArray(finalOptions.tags?.stopNodes)) {
+    finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map((entry) => {
+      if (typeof entry === 'string') {
+        return { expression: entry, skipEnclosures: [] };
+      }
+      if (entry && typeof entry === 'object') {
+        // Pre-compiled Expression instance (from path-expression-matcher).
+        // Detected by presence of .matches() — plain config objects never have this method.
+        if (typeof entry.matches === 'function') {
+          return { expression: entry, skipEnclosures: [] };
+        }
+        // Plain { expression, skipEnclosures? } object
+        if (entry.expression === undefined) {
+          throw new ParseError(
+            "Each stopNodes object entry must have an 'expression' property.",
+            ErrorCode.INVALID_INPUT,
+          );
+        }
+        return {
+          expression: entry.expression,
+          skipEnclosures: Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [],
+        };
+      }
+      throw new ParseError(
+        `Invalid stopNodes entry: expected a string, Expression, or { expression, skipEnclosures } object.`,
+        ErrorCode.INVALID_INPUT,
+      );
+    });
   }
 
   if (finalOptions.onDangerousProperty === null) {

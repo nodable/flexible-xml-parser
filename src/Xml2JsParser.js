@@ -1,7 +1,7 @@
 import StringSource from './InputSource/StringSource.js';
 import BufferSource from './InputSource/BufferSource.js';
 import { readTagExp, readClosingTagName, flushAttributes } from './XmlPartReader.js';
-import { StopNodeReader } from './StopNodeReader.js';
+import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
 import { Expression, Matcher } from 'path-expression-matcher';
 import EntitiesParser from './EntitiesParser.js';
@@ -52,22 +52,21 @@ export default class Xml2JsParser {
 
     this._unpairedSet = new Set(this.options.tags.unpaired);
 
-    // Pre-compile stopNodes as Expression objects (tags.stopNodes).
-    // Accepts both plain strings and already-compiled Expression instances.
+    // Pre-compile stopNodes as { expr: Expression, skipEnclosures: [] } objects.
+    // OptionsBuilder has already normalized each entry to { expression, skipEnclosures }.
     this.stopNodeExpressions = [];
-    for (const expr of this.options.tags.stopNodes) {
-      if (expr instanceof Expression) {
-        this.stopNodeExpressions.push(expr);
-      } else {
-        this.stopNodeExpressions.push(new Expression(expr));
-      }
+    for (const entry of this.options.tags.stopNodes) {
+      const expr = entry.expression instanceof Expression
+        ? entry.expression
+        : new Expression(entry.expression);
+      this.stopNodeExpressions.push({ expr, skipEnclosures: entry.skipEnclosures });
     }
   }
 
   initializeParser() {
     this.tagTextData = "";
     this.tagsStack = [];
-    this._stopNodeReader = null;
+    this._stopNodeProcessor = null;
 
     if (!this.matcher) {
       this.matcher = new Matcher();
@@ -234,22 +233,23 @@ export default class Xml2JsParser {
     this.addTextNode();
 
     // ── Stop-node resume ─────────────────────────────────────────────────────
-    // When a chunk boundary fell inside StopNodeReader.collect(), feed() caught
+    // When a chunk boundary fell inside StopNodeProcessor.collect(), feed() caught
     // UNEXPECTED_END and rewound the source to the '<' of the stop node's
-    // opening tag. On the next feed() we re-enter here with the reader active.
+    // opening tag. On the next feed() we re-enter here with the processor active.
     // Re-consume the opening tag (source was rewound to its '<'), then resume
-    // collection — the reader remembers all accumulated content and depth.
-    if (this._stopNodeReader && this._stopNodeReader.isActive()) {
-      const { tagDetail } = this._stopNodeReaderMeta;
-      this._stopNodeReader.resumeAfterOpenTag();
+    // collection — the processor remembers all accumulated content and depth.
+    if (this._stopNodeProcessor && this._stopNodeProcessor.isActive()) {
+      const { tagDetail } = this._stopNodeProcessorMeta;
+      this._stopNodeProcessor.resumeAfterOpenTag();
       readTagExp(this); // re-consume the opening tag from the rewound source
-      const content = this._stopNodeReader.collect(this.source);
+      const content = this._stopNodeProcessor.collect(this.source);
       this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
-      this._stopNodeReader = null;
-      this._stopNodeReaderMeta = null;
+      this._stopNodeProcessor = null;
+      this._stopNodeProcessorMeta = null;
       return;
     }
 
@@ -276,12 +276,6 @@ export default class Xml2JsParser {
     }
 
     // ── Two-pass attribute handling ──────────────────────────────────────────
-    // Pass 1: push tag with empty attributes so the path is correct, then
-    //         update with raw (unparsed) attribute values so that attribute-
-    //         based stop-node expressions (e.g. "..div[class=code]") can match
-    //         correctly before the value-parser chain runs.
-    // Pass 2: attribute value parsers run inside outputBuilder.addTag(), by
-    //         which point the matcher already holds the full attribute context.
     const rawAttributes = tagExp.rawAttributes || {};
 
     this.matcher.push(processedTagName, {});
@@ -289,12 +283,13 @@ export default class Xml2JsParser {
       this.matcher.updateCurrent(rawAttributes);
     }
 
-    // Pass 2: run attribute value parsers now that matcher has full context.
     if (!this.options.skip.attributes) {
       flushAttributes(tagExp._attrsExp, this);
     }
 
     // Stop-node check AFTER attributes are set so attribute conditions work.
+    const stopNodeConfig = this.isStopNode();
+
     if (this.isUnpaired(processedTagName)) {
       this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
       this.outputBuilder.closeTag(this.readonlyMatcher);
@@ -303,18 +298,19 @@ export default class Xml2JsParser {
       this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
-    } else if (this.isStopNode()) {
-      // First encounter: create a fresh reader, activate it, collect content.
-      this._stopNodeReader = new StopNodeReader(processedTagName);
-      this._stopNodeReaderMeta = { tagDetail };
-      this._stopNodeReader.activate();
-      const content = this._stopNodeReader.collect(this.source);
+    } else if (stopNodeConfig) {
+      // First encounter: create a fresh processor with the matching skipEnclosures.
+      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, stopNodeConfig.skipEnclosures);
+      this._stopNodeProcessorMeta = { tagDetail };
+      this._stopNodeProcessor.activate();
+      const content = this._stopNodeProcessor.collect(this.source);
       this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
-      this._stopNodeReader = null;
-      this._stopNodeReaderMeta = null;
+      this._stopNodeProcessor = null;
+      this._stopNodeProcessorMeta = null;
     } else {
       this.pushTag(tagDetail);
     }
@@ -410,11 +406,15 @@ export default class Xml2JsParser {
     return this._unpairedSet.has(tagName);
   }
 
-  isStopNode() {// TODO: check how number of calls to this function can be reduced
-    for (const expr of this.stopNodeExpressions) {
-      if (this.matcher.matches(expr)) return true;
+  /**
+   * Returns the matched stop-node config `{ expr, skipEnclosures }` if the
+   * current matcher position matches any stop-node expression, or `null` if not.
+   */
+  isStopNode() {
+    for (const config of this.stopNodeExpressions) {
+      if (this.matcher.matches(config.expr)) return config;
     }
-    return false;
+    return null;
   }
 
   /**
