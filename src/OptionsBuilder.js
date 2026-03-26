@@ -1,4 +1,5 @@
 import JsObjOutputBuilder from './OutputBuilders/JsObjBuilder.js';
+import { Expression } from 'path-expression-matcher';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 
@@ -215,37 +216,40 @@ export const buildOptions = function (options) {
   // Normalize stopNodes entries into { expression, skipEnclosures } objects.
   //
   // Accepted forms:
-  //   "..script"                         string  → { expression, skipEnclosures: [] }
-  //   new Expression("..script")          object  → { expression, skipEnclosures: [] }
-  //   { expression, skipEnclosures }      object  → as-is (skipEnclosures defaults to [])
+  //   "..script"                         string  → { expression: compiled Expression, skipEnclosures: [] }
+  //   Expression instance                object  → { expression: Expression instance, skipEnclosures: [] }
+  //   { expression: "..script", skipEnclosures?: [] }  → { expression: compiled Expression, skipEnclosures: [...] }
+  //   { expression: Expression instance, skipEnclosures?: [] } → { expression: Expression instance, skipEnclosures: [...] }
   //
-  // Plain string and Expression entries use skipEnclosures: [] (plain/firstMatch mode):
-  // the very first </tagName> ends collection with no depth tracking.
-  // Use an explicit object entry with skipEnclosures: [...xmlEnclosures] to enable
-  // comment/CDATA/PI skipping and depth tracking.
+  // skipEnclosures is optional and defaults to [].
   if (Array.isArray(finalOptions.tags?.stopNodes)) {
     finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map((entry) => {
+      // Case 1: string → wrap in object with skipEnclosures
       if (typeof entry === 'string') {
         return { expression: entry, skipEnclosures: [] };
       }
+
+      // Case 2: object
       if (entry && typeof entry === 'object') {
-        // Pre-compiled Expression instance (from path-expression-matcher).
-        // Detected by presence of .matches() — plain config objects never have this method.
-        if (typeof entry.matches === 'function') {
+        // Case 2a: entry is an Expression instance
+        if (entry instanceof Expression) {
           return { expression: entry, skipEnclosures: [] };
         }
-        // Plain { expression, skipEnclosures? } object
-        if (entry.expression === undefined) {
-          throw new ParseError(
-            "Each stopNodes object entry must have an 'expression' property.",
-            ErrorCode.INVALID_INPUT,
-          );
+
+        // Case 2b: entry is a config object { expression, skipEnclosures? }
+        if (entry.expression !== undefined) {
+          return {
+            expression: entry.expression,
+            skipEnclosures: Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [],
+          };
         }
-        return {
-          expression: entry.expression,
-          skipEnclosures: Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [],
-        };
+
+        throw new ParseError(
+          "Each stopNodes object entry must have an 'expression' property or be an Expression instance.",
+          ErrorCode.INVALID_INPUT,
+        );
       }
+
       throw new ParseError(
         `Invalid stopNodes entry: expected a string, Expression, or { expression, skipEnclosures } object.`,
         ErrorCode.INVALID_INPUT,
