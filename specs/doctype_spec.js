@@ -1,6 +1,7 @@
 import XMLParser from "../src/XMLParser.js";
 import {
   runAcrossAllInputSources,
+  frunAcrossAllInputSources,
   runAcrossAllInputSourcesWithException,
 } from "./helpers/testRunner.js";
 

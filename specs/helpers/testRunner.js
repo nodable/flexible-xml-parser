@@ -25,7 +25,7 @@ export function createInputSource(xmlString, type) {
         type: 'feedable',
         parse: (parser) => {
           // Feed in chunks of ~50 characters to simulate streaming
-          const chunkSize = 50;
+          const chunkSize = 1;
           for (let i = 0; i < xmlString.length; i += chunkSize) {
             parser.feed(xmlString.substring(i, i + chunkSize));
           }
@@ -48,8 +48,8 @@ export function createInputSource(xmlString, type) {
  * @param {object} parserOptions - Optional parser options
  */
 export function runAcrossAllInputSources(testName, xmlString, testFn, parserOptions = {}) {
-  // const inputTypes = ['string', 'buffer', 'feedable'];
-  const inputTypes = ['string'];
+  const inputTypes = ['string', 'buffer', 'feedable'];
+  // const inputTypes = ['string'];
 
   inputTypes.forEach(inputType => {
     it(`${testName} [${inputType}]`, function () {
@@ -60,10 +60,31 @@ export function runAcrossAllInputSources(testName, xmlString, testFn, parserOpti
     });
   });
 }
+export function frunAcrossAllInputSources(testName, xmlString, testFn, parserOptions = {}) {
+  const inputTypes = ['string', 'buffer', 'feedable'];
+  // const inputTypes = ['feedable'];
+
+  inputTypes.forEach(inputType => {
+    fit(`${testName} [${inputType}]`, function () {
+      const inputSource = createInputSource(xmlString, inputType);
+      const parser = new XMLParser(parserOptions);
+      const result = inputSource.parse(parser);
+      testFn(result, inputSource.type);
+    });
+  });
+}
 
 export function runAcrossAllInputSourcesWithException(testName, xmlString, errMsg, parserOptions = {}) {
-  // const inputTypes = ['string', 'buffer', 'feedable'];
-  const inputTypes = ['string'];
+  const inputTypes = ['string', 'buffer', 'feedable'];
+  // const inputTypes = ['string'];
+  let stringErrMsg = "";
+  let feedableErrMsg = "";
+  if (typeof errMsg === 'string') {
+    stringErrMsg = errMsg;
+  } else {
+    stringErrMsg = errMsg.string;
+    feedableErrMsg = errMsg.feedable;
+  }
 
   inputTypes.forEach(inputType => {
     it(`${testName} [${inputType}]`, function () {
@@ -71,7 +92,7 @@ export function runAcrossAllInputSourcesWithException(testName, xmlString, errMs
       expect(() => {
         const parser = new XMLParser(parserOptions);
         inputSource.parse(parser);
-      }).toThrowError(errMsg);
+      }).toThrowError(inputType === 'feedable' ? feedableErrMsg : stringErrMsg);
     });
   });
 }
