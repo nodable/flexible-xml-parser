@@ -518,9 +518,6 @@ import JsArrBuilder from 'flex-xml-parser/src/OutputBuilders/JsArrBuilder.js';
 const parser = new XMLParser({ OutputBuilder: new JsArrBuilder() });
 ```
 
-### `JsMinArrBuilder`
-
-Compact ordered array format with smaller memory footprint.
 
 ### Custom Output Builder
 

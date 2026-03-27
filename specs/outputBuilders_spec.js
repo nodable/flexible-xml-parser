@@ -1,6 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
 import JsArrBuilder from "../src/OutputBuilders/JsArrBuilder.js";
-import JsMinArrBuilder from "../src/OutputBuilders/JsMinArrBuilder.js";
 import JsObjOutputBuilder, { JsObjBuilder } from "../src/OutputBuilders/JsObjBuilder.js";
 
 describe("Output Builders", function () {
@@ -79,23 +78,6 @@ describe("Output Builders", function () {
 
   });
 
-  describe("JsMinArrBuilder", function () {
-
-    it("should create minimal array format", function () {
-      const options = {
-        OutputBuilder: new JsMinArrBuilder(),
-        skip: { attributes: false }
-      };
-
-      const parser = new XMLParser(options);
-      const result = parser.parse(xmlData);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result.child)).toBe(true);
-    });
-
-  });
-
   describe("Custom Output Builder", function () {
 
     it("should allow custom output builder implementation via factory pattern", function () {
@@ -114,7 +96,7 @@ describe("Output Builders", function () {
           const parsers = { ...base.registeredParsers };
           return new CustomBuilder(parserOptions, base.options, parsers);
         },
-        registerValueParser() {},
+        registerValueParser() { },
       };
 
       const parser = new XMLParser({ OutputBuilder: factory });
