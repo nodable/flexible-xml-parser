@@ -49,7 +49,10 @@ export const DANGEROUS_PROPERTY_NAMES = [
   '__defineGetter__',
   '__defineSetter__',
   '__lookupGetter__',
-  '__lookupSetter__'
+  '__lookupSetter__',
+  "toLocaleString",
+  "isPrototypeOf",
+  "propertyIsEnumerable"
 ];
 
 export const criticalProperties = ["__proto__", "constructor", "prototype"];
