@@ -37,6 +37,23 @@ class JsObjBuilder extends BaseOutputBuilder {
       tags: { ...builderOptions.tags, ...parserOptions.tags },
       attributes: { ...builderOptions.attributes, ...parserOptions.attributes },
       textJoint: builderOptions.textJoint || "", // when text for a tag is combined from multiple text nodes
+
+      /**
+       * Function to determine if a tag should be forced into an array.
+       * Called with (matcher, isLeafNode) where:
+       * - matcher: ReadOnlyMatcher - path matcher for current tag
+       * - isLeafNode: boolean|null - null when not yet determinable
+       * Returns: boolean - true to force array, false otherwise
+       */
+      forceArray: builderOptions?.forceArray || ((matcher, isLeafNode) => false),
+
+      /**
+       * Boolean flag that forces creation of a text node for every tag.
+       * When true, a text node is always created under nameFor.text even if
+       * the tag has no other children or attributes.
+       * Default: false (text node created only when tag has attributes or children)
+       */
+      forceTextNode: builderOptions?.forceTextNode ?? false,
     };
 
     this.registeredParsers = registeredParsers;
@@ -88,7 +105,28 @@ class JsObjBuilder extends BaseOutputBuilder {
     let value = this.value;
     const textValue = this.textValue;
 
-    const isLeafNode = typeof value !== "object" && !Array.isArray(value);
+    // A tag is a leaf node if it has no child elements.
+    // It can have attributes and still be a leaf node.
+    let isLeafNode;
+    if (typeof value !== "object" || Array.isArray(value)) {
+      // Empty string or unexpected array → treat as leaf
+      isLeafNode = true;
+    } else if (isEmpty(value)) {
+      // Empty object → no attributes, no children → leaf
+      isLeafNode = true;
+    } else {
+      // Check if value contains ONLY attribute keys (no child elements)
+      const attrPrefix = this.options.attributes.prefix;
+      const attrGroupBy = this.options.attributes.groupBy;
+
+      if (attrGroupBy) {
+        // Attributes are grouped under a single key
+        isLeafNode = Object.keys(value).length === 1 && value.hasOwnProperty(attrGroupBy);
+      } else {
+        // Attributes have a prefix (default "@_")
+        isLeafNode = Object.keys(value).every(k => k.startsWith(attrPrefix));
+      }
+    }
 
     const context = {
       elementName: tagName,
@@ -98,12 +136,36 @@ class JsObjBuilder extends BaseOutputBuilder {
       isLeafNode: isLeafNode,
     };
 
+
     if (isLeafNode) {
-      value = this.parseValue(textValue, this.options.tags.valueParsers, context);
-    } else if (textValue.length > 0) {
-      value[this.options.nameFor.text] =
-        this.parseValue(textValue, this.options.tags.valueParsers, context);
+      // Leaf node: parse the text value
+      const parsedText = this.parseValue(textValue, this.options.tags.valueParsers, context);
+
+      if (this.options.forceTextNode) {
+        // forceTextNode: always create object with #text, merge any existing attributes
+        if (typeof value === 'object' && !isEmpty(value)) {
+          // Has attributes - merge text node into the attributes object
+          value[this.options.nameFor.text] = parsedText;
+        } else {
+          // No attributes - create new object with just text node
+          value = { [this.options.nameFor.text]: parsedText };
+        }
+      } else {
+        // Normal mode: if no attributes, use plain value; otherwise add text node
+        if (typeof value === 'object' && !isEmpty(value)) {
+          // Has attributes - add text node
+          value[this.options.nameFor.text] = parsedText;
+        } else {
+          // No attributes - use plain parsed value
+          value = parsedText;
+        }
+      }
+    } else if (textValue.length > 0 || this.options.forceTextNode) {
+      // Non-leaf node: add text node if there's text OR if forceTextNode is enabled
+      const parsedText = this.parseValue(textValue, this.options.tags.valueParsers, context);
+      value[this.options.nameFor.text] = parsedText;
     }
+
 
     let resultTag = { tagName, value };
 
@@ -114,7 +176,11 @@ class JsObjBuilder extends BaseOutputBuilder {
 
     const arr = this.tagsStack.pop();
     let parentTag = arr[2];
-    parentTag = this._addChildTo(resultTag.tagName, resultTag.value, parentTag);
+
+    // Check if this tag should be forced into an array
+    const shouldForceArray = this.options.forceArray(matcher, isLeafNode);
+
+    parentTag = this._addChildTo(resultTag.tagName, resultTag.value, parentTag, shouldForceArray);
 
     this.tagName = arr[0];
     this.textValue = arr[1];
@@ -125,19 +191,23 @@ class JsObjBuilder extends BaseOutputBuilder {
     if (typeof this.value === "string") {
       this.value = { [this.options.nameFor.text]: this.value };
     }
-    this._addChildTo(key, val, this.value);
+    this._addChildTo(key, val, this.value, false);
     this.attributes = {};
   }
 
-  _addChildTo(key, val, node) {
+  _addChildTo(key, val, node, forceArray) {
     if (typeof node === 'string') node = {};
-    // Belt-and-suspenders guard: critical prototype keys should never reach here
-    // (sanitizeName in Xml2JsParser is the primary defence), but reject them here
-    // too so custom OutputBuilder subclasses are also protected.
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return node;
+
+
     if (!Object.prototype.hasOwnProperty.call(node, key)) {
-      node[key] = val;
+      // First occurrence of this key
+      if (forceArray) {
+        node[key] = [val];
+      } else {
+        node[key] = val;
+      }
     } else {
+      // Key already exists
       if (!Array.isArray(node[key])) {
         node[key] = [node[key]];
       }
