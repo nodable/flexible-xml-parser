@@ -1,3 +1,6 @@
+
+//OrderedOutputBuilder
+
 import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
 import numParser from '../ValueParsers/number.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
@@ -37,6 +40,7 @@ class JsArrBuilder extends BaseOutputBuilder {
       nameFor: { ...builderOptions.nameFor, ...parserOptions.nameFor },
       tags: { ...builderOptions.tags, ...parserOptions.tags },
       attributes: { ...builderOptions.attributes, ...parserOptions.attributes },
+      compactLeaf: builderOptions.compactLeaf === true
     };
 
     this.registeredParsers = registeredParsers;
@@ -44,6 +48,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     this.root = new Node(rootName);
     this.currentNode = this.root;
     this.attributes = {};
+    this._pendingStopNode = false;
   }
 
   addTag(tag, matcher) {
@@ -54,13 +59,13 @@ class JsArrBuilder extends BaseOutputBuilder {
 
   /**
    * Called when a stop node is fully collected, before `addValue`.
-   * Fires the user-supplied `onStopNode` callback if one is configured.
    *
-   * @param {TagDetail} tagDetail  - Name, line, col, index of the stop node.
-   * @param {string}    rawContent - Raw unparsed content between the tags.
-   * @param {ReadonlyMatcher} matcher - Read-only path matcher for the stop node.
+   * @param {TagDetail}       tagDetail  - name, line, col, index of the stop node
+   * @param {string}          rawContent - raw unparsed content between the tags
+   * @param {ReadonlyMatcher} matcher    - read-only path matcher
    */
   onStopNode(tagDetail, rawContent, matcher) {
+    this._pendingStopNode = true;
     if (typeof this.options.onStopNode === 'function') {
       this.options.onStopNode(tagDetail, rawContent, matcher);
     }
@@ -69,10 +74,34 @@ class JsArrBuilder extends BaseOutputBuilder {
   closeTag(matcher) {
     const node = this.currentNode;
     this.currentNode = this.tagsStack.pop();
+
+    // Compact Stop Node
+    const isStopNode = this._pendingStopNode;
+    this._pendingStopNode = false;
+
     if (this.options.onClose !== undefined) {
       const resultTag = this.options.onClose(node, matcher);
       if (resultTag) return;
     }
+
+    // Compact Leaf
+    if (this.options.compactLeaf && !node[":@"]) {
+      const textKey = this.options.nameFor.text;
+
+      const isSingleTextChild =
+        node.child.length === 1 &&
+        Object.prototype.hasOwnProperty.call(node.child[0], textKey) &&
+        Object.keys(node.child[0]).length === 1;
+
+      const isEmptyLeaf = node.child.length === 0;
+
+      if (isSingleTextChild || isEmptyLeaf) {
+        const value = isSingleTextChild ? node.child[0][textKey] : "";
+        this.currentNode.child.push({ [node.tagname]: value });
+        return;
+      }
+    }
+
     this.currentNode.child.push(node);
   }
 
