@@ -3,6 +3,7 @@ import { xmlEnclosures, quoteEnclosures } from "../src/StopNodeProcessor.js";
 import {
   runAcrossAllInputSources,
   frunAcrossAllInputSources,
+  xrunAcrossAllInputSources,
   runAcrossAllInputSourcesWithException,
 } from "./helpers/testRunner.js";
 
@@ -119,10 +120,10 @@ describe("Stop Nodes — same name tags and special content", function () {
       // Plain mode: ends at the FIRST </stopNode> (the inner one)
       expect(typeof result.root.stopNode).toBe("string");
       expect(result.root.stopNode).toContain("<stopNode>");
-      expect(result.root.stopNode).not.toContain("</stopNode>");
+      expect(result.root.stopNode).toContain("</stopNode>");
       expect(result.root.stopNode).toContain("level 2 - nested stopNode");
     },
-    { tags: { stopNodes: ["root.stopNode"] } }
+    { tags: { stopNodes: [{ "expression": "root.stopNode", "nested": true }] } }
   );
 
   // With xmlEnclosures, depth tracking is active → outer close tag ends collection.
@@ -145,7 +146,7 @@ describe("Stop Nodes — same name tags and special content", function () {
       expect(result.root.stopNode).toContain("level 2 - nested stopNode");
       expect(result.root.stopNode).toContain("back to level 1");
     },
-    { tags: { stopNodes: [{ expression: "root.stopNode", skipEnclosures: [...xmlEnclosures] }] } }
+    { tags: { stopNodes: [{ expression: "root.stopNode", nested: true }] } }
   );
 
   runAcrossAllInputSources(
@@ -200,7 +201,7 @@ describe("Stop Nodes — same name tags and special content", function () {
       expect(result.root.item.split("</item>").length).toBe(3);
       expect(result.root.afterItem).toBe("parsed normally");
     },
-    { tags: { stopNodes: [{ expression: "root.item", skipEnclosures: [...xmlEnclosures] }] } }
+    { tags: { stopNodes: [{ expression: "root.item", nested: true }] } }
   );
 
 });
@@ -419,7 +420,7 @@ describe("Stop Nodes — complex mixed content", function () {
       expect(result.root.stopNode).toContain("Final text");
       expect(result.root.after).toBe("parsed");
     },
-    { tags: { stopNodes: [{ expression: "root.stopNode", skipEnclosures: [...xmlEnclosures] }] } }
+    { tags: { stopNodes: [{ expression: "root.stopNode", nested: true, skipEnclosures: [...xmlEnclosures] }] } }
   );
 
 });
@@ -531,7 +532,7 @@ describe("Stop Nodes — whitespace in tags", function () {
       expect(result.root.stopNode).toContain("<stopNode >inner</stopNode   >");
       expect(result.root.after).toBe("parsed");
     },
-    { tags: { stopNodes: [{ expression: "root.stopNode", skipEnclosures: [...xmlEnclosures] }] } }
+    { tags: { stopNodes: [{ expression: "root.stopNode", nested: true, skipEnclosures: [...xmlEnclosures] }] } }
   );
 
 });
@@ -693,12 +694,20 @@ describe("Stop Nodes — skipEnclosures", function () {
       expect(typeof result.root.style).toBe("string");
       // Double-quote string skipped
       expect(result.root.style).toContain('"</style>"');
-      // /* */ is NOT an enclosure — </style> inside it ends collection in plain-mode
-      // but with quoteEnclosures only the string is skipped; comment /* */ is NOT skipped
-      // so collection ends at the first unenclosed </style>
       expect(result.root.after).toBe("ok");
     },
-    { tags: { stopNodes: [{ expression: "root.style", skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] }] } }
+    {
+      tags: {
+        stopNodes: [{
+          expression: "root.style",
+          nested: true,
+          skipEnclosures: [
+            ...quoteEnclosures,
+            { open: "/*", close: "*/" }
+          ]
+        }]
+      }
+    }
   );
 
   // ── 10d. Custom enclosures ─────────────────────────────────────────────────

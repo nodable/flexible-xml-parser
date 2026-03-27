@@ -11,21 +11,22 @@ import { ParseError, ErrorCode } from './ParseError.js';
  *     "..script",                                              // plain — no enclosures (default)
  *     { expression: "body..pre",   skipEnclosures: [...xmlEnclosures] },
  *     { expression: "head..style", skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] },
+ *     { expression: "root.stopNode", nested: true, skipEnclosures: [{ open: '<!--', close: '-->' }] },
  *   ]
  */
 
 /** XML structural delimiters — comments, CDATA, processing instructions. */
 export const xmlEnclosures = [
-  { open: '<!--', close: '-->' },   // comment
-  { open: '<![CDATA[', close: ']]>' },    // CDATA section
-  { open: '<?', close: '?>' },    // processing instruction
+  { open: '<!--', close: '-->' },       // comment
+  { open: '<![CDATA[', close: ']]>' },  // CDATA section
+  { open: '<?', close: '?>' },          // processing instruction
 ];
 
 /** String literal delimiters — useful for JS / CSS stop-node content. */
 export const quoteEnclosures = [
   { open: "'", close: "'" },
   { open: '"', close: '"' },
-  { open: '`', close: '`' },   // template literal
+  { open: '`', close: '`' },  // template literal
 ];
 
 /**
@@ -33,25 +34,34 @@ export const quoteEnclosures = [
  *
  * A stop node is a "sealed envelope": the parser goes blind the moment it
  * enters one, collecting raw characters until the matching closing tag is
- * found at the correct depth. The content is returned as a raw string and
- * never parsed by the XML engine.
+ * found. The content is returned as a raw string and never parsed by the
+ * XML engine.
  *
- * ### skipEnclosures
+ * ### Modes
  *
- * Each stop-node definition can supply a `skipEnclosures` array of
- * `{ open: string, close: string }` pairs. While inside an enclosure the
- * processor ignores closing-tag detection entirely — so a `</script>` that
- * appears inside a string literal or a comment does not end the stop node.
+ * The behaviour is controlled by two independent flags:
  *
- * Enclosures are checked in array order; the first match wins. Once inside
- * an enclosure, no further matching (including other enclosures) runs until
- * the close marker is found.
+ *   **`nested`** (boolean, default false):
+ *     When true, the processor tracks the depth of nested same-name opening
+ *     tags. The stop node ends only when the depth returns to zero — i.e. the
+ *     closing tag that matches the original opening tag. When false (default),
+ *     the very first `</tagName>` ends the stop node regardless of nesting.
  *
- * A `skipEnclosures: []` (or omitted) array means plain/first-match behaviour:
- * the very first `</tagName>` ends the stop node, with no depth tracking.
+ *   **`skipEnclosures`** (array, default []):
+ *     A list of `{ open: string, close: string }` pairs. When the processor
+ *     encounters an open marker it consumes everything up to the close marker
+ *     wholesale, suppressing all closing-tag (and depth) logic for that span.
+ *     Enclosures are checked in array order; the first match wins. When the
+ *     array is empty, no enclosure skipping is performed.
  *
- * When `skipEnclosures` has entries, depth tracking is enabled so nested
- * same-name open tags are handled correctly.
+ * The two flags compose freely:
+ *
+ *   | nested | skipEnclosures | Behaviour                                                              |
+ *   |--------|----------------|------------------------------------------------------------------------|
+ *   | false  | []             | Plain: stop at first `</tagName>`.                                     |
+ *   | true   | []             | Depth-only: track nested open tags, no enclosures.                    |
+ *   | false  | [...]          | Enclosure-only: skip interiors, stop at first close tag outside them. |
+ *   | true   | [...]          | Full: depth tracking + enclosure skipping.                             |
  *
  * ### Chunk-boundary survival (feedable / stream sources)
  *
@@ -65,19 +75,23 @@ export const quoteEnclosures = [
  */
 export class StopNodeProcessor {
   /**
-   * @param {string}   tagName        The stop-node tag name to watch for.
-   * @param {Array<{open:string,close:string}>} skipEnclosures
-   *   Pairs whose interiors are skipped when scanning for the closing tag.
-   *   Pass an empty array (default) for plain first-match behaviour.
+   * @param {string}   tagName
+   *   The stop-node tag name to watch for.
+   * @param {object}   [opts]
+   * @param {boolean}  [opts.nested=false]
+   *   When true, nested same-name open tags increment a depth counter; the
+   *   stop node ends only when depth returns to zero.
+   * @param {Array<{open:string,close:string}>} [opts.skipEnclosures=[]]
+   *   Enclosure pairs whose interiors suppress closing-tag detection.
    */
-  constructor(tagName, skipEnclosures = []) {
+  constructor(tagName, { nested = false, skipEnclosures = [] } = {}) {
     this._tagName = tagName;
+    this._nested = nested;
     this._enclosures = skipEnclosures;
-    this._trackDepth = skipEnclosures.length > 0;
 
-    // Runtime state — reset in activate()
+    // Runtime state — reset in activate() / resumeAfterOpenTag()
     this._content = '';
-    this._depth = 1;   // already inside one opening tag
+    this._depth = 1;   // already inside the opening tag
     this._active = false;
   }
 
@@ -101,11 +115,9 @@ export class StopNodeProcessor {
    * the stop node's opening tag, so the caller must re-consume the opening tag
    * via `readTagExp` before calling `collect()`.
    *
-   * Because the rewind replays the entire opening tag, any content that
-   * `collect()` had accumulated during the failed attempt is invalid — it may
-   * include characters from the opening tag itself that were read before the
-   * UNEXPECTED_END. Reset to a clean post-activation state so the next
-   * `collect()` starts fresh from right after the opening tag.
+   * Because the rewind replays the entire opening tag, any content accumulated
+   * during the failed attempt is invalid. Reset to a clean post-activation
+   * state so the next `collect()` starts fresh from right after the opening tag.
    */
   resumeAfterOpenTag() {
     this._content = '';
@@ -115,16 +127,17 @@ export class StopNodeProcessor {
   /**
    * Collect raw content from `source` until the matching closing tag is found.
    *
-   * Two modes depending on `skipEnclosures`:
+   * Dispatches to one of four internal strategies based on the `nested` flag
+   * and whether `skipEnclosures` is non-empty:
    *
-   *   **Plain mode** (`skipEnclosures` empty):
-   *     Scans for the first `</tagName>`, no depth tracking. Fast path.
-   *
-   *   **Enclosure-aware mode** (`skipEnclosures` non-empty):
-   *     Checks enclosure open markers in priority order before every `<`.
-   *     While inside an enclosure, closing-tag and depth-tracking logic is
-   *     suspended. Depth tracks nested same-name open tags so they don't
-   *     prematurely end the stop node.
+   *   - Plain          (`nested:false`, no enclosures): fastest path — scan for
+   *                    the literal `</tagName>` string and stop immediately.
+   *   - Depth-only     (`nested:true`,  no enclosures): track open/close tags
+   *                    for depth, no enclosure skipping.
+   *   - Enclosure-only (`nested:false`, enclosures): skip enclosure interiors,
+   *                    stop at the first closing tag found outside them.
+   *   - Full           (`nested:true`,  enclosures): depth tracking AND
+   *                    enclosure skipping.
    *
    * Progress (`_content`, `_depth`) is stored in instance fields so a
    * chunk-boundary `UNEXPECTED_END` can be retried seamlessly.
@@ -135,22 +148,27 @@ export class StopNodeProcessor {
   collect(source) {
     source.markTokenStart(1);
 
-    if (this._trackDepth) {
-      return this._collectEnclosureAware(source);
-    } else {
+    if (!this._nested && this._enclosures.length === 0) {
       return this._collectPlain(source);
     }
+    if (this._nested && this._enclosures.length === 0) {
+      return this._collectDepthOnly(source);
+    }
+    if (!this._nested && this._enclosures.length > 0) {
+      return this._collectEnclosureOnly(source);
+    }
+    // nested && enclosures.length > 0
+    return this._collectFull(source);
   }
 
-  // ── Private: plain mode ────────────────────────────────────────────────────
+  // ── Strategy 1: Plain ──────────────────────────────────────────────────────
 
   /**
-   * Plain mode: scan for the first occurrence of `</tagName` followed by
-   * optional whitespace then `>` (no other characters), with no depth
-   * tracking and no enclosure skipping.
+   * Fastest path. No depth tracking, no enclosure skipping.
+   * Scans for the literal `</tagName>` followed by optional whitespace then `>`.
    */
   _collectPlain(source) {
-    const needed = '</' + this._tagName;  // e.g. '</script'
+    const needed = '</' + this._tagName;
 
     while (source.canRead()) {
       const ch = source.readChAt(0);
@@ -160,41 +178,28 @@ export class StopNodeProcessor {
         continue;
       }
 
-      // We're at '<' — check if this looks like our closing tag
-      let match = true;
-      for (let i = 0; i < needed.length; i++) {
-        if (source.readChAt(i) !== needed[i]) { match = false; break; }
-      }
-
-      if (match) {
-        // After the tag name must be '>' or only whitespace before '>'.
-        // Peek ahead to confirm: scan from needed.length until we find '>'
-        // or a non-whitespace character.
+      // At '<' — check whether this is our closing tag
+      if (this._peekMatch(source, needed)) {
         let offset = needed.length;
         let validClose = false;
         while (true) {
           const c = source.readChAt(offset);
           if (c === '>') { validClose = true; break; }
           if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { offset++; continue; }
-          break; // non-whitespace, non-'>' — not a valid close tag
+          break;
         }
 
         if (validClose) {
-          // Consume '</' + tagName + optional whitespace + '>'
+          // Consume `</tagName + optional whitespace + >`
           this._skipChars(source, needed.length);
           while (source.canRead()) {
             const c = source.readCh();
             if (c === '>') break;
           }
-          const result = this._content;
-          this._active = false;
-          this._content = '';
-          this._depth = 1;
-          return result;
+          return this._finish();
         }
       }
 
-      // Not our closing tag — consume the '<' and continue
       this._content += source.readCh();
     }
 
@@ -204,16 +209,13 @@ export class StopNodeProcessor {
     );
   }
 
-  // ── Private: enclosure-aware mode ─────────────────────────────────────────
+  // ── Strategy 2: Depth-only ─────────────────────────────────────────────────
 
   /**
-   * Enclosure-aware mode:
-   *   - At every position, check enclosure open markers in priority order.
-   *   - While inside an enclosure, skip to the close marker wholesale.
-   *   - When at '<' (and not in an enclosure), check for depth changes.
-   *   - Closing tags end the stop node only when depth reaches 0.
+   * Depth tracking without enclosure skipping.
+   * Properly handles nested same-name open tags. No enclosure awareness.
    */
-  _collectEnclosureAware(source) {
+  _collectDepthOnly(source) {
     while (this._depth > 0) {
       if (!source.canRead()) {
         throw new ParseError(
@@ -222,29 +224,15 @@ export class StopNodeProcessor {
         );
       }
 
-      // ── Check for enclosure openers at current position ───────────────────
-      const encIdx = this._matchEnclosureOpen(source);
-      if (encIdx !== -1) {
-        const enc = this._enclosures[encIdx];
-        // Consume the open marker into content
-        this._skipChars(source, enc.open.length);
-        this._content += enc.open;
-        // Consume everything until the close marker
-        const interior = this._readUpto(source, enc.close);
-        this._content += interior + enc.close;
-        continue;
-      }
-
       const ch = source.readChAt(0);
 
-      // ── Not '<' — just accumulate ─────────────────────────────────────────
       if (ch !== '<') {
         this._content += source.readCh();
         continue;
       }
 
-      // ── We're at '<' — classify what follows ─────────────────────────────
-      source.readCh(); // consume '<'
+      // Consume '<'
+      source.readCh();
 
       if (!source.canRead()) {
         throw new ParseError(
@@ -255,39 +243,29 @@ export class StopNodeProcessor {
 
       const c0 = source.readChAt(0);
 
-      // ── Closing tag: </...>  ──────────────────────────────────────────────
       if (c0 === '/') {
+        // Closing tag
         source.readCh(); // consume '/'
         const closeName = this._readTagName(source);
-        const closeSuffix = this._readToAngleClose(source); // optional WS + '>'
+        const closeSuffix = this._readToAngleClose(source);
 
         if (closeName === this._tagName) {
           this._depth--;
-          if (this._depth === 0) {
-            const result = this._content;
-            this._active = false;
-            this._content = '';
-            this._depth = 1;
-            return result;
-          }
+          if (this._depth === 0) return this._finish();
         }
-        // Not our tag (or depth still > 0) — preserve as-is
         this._content += '</' + closeName + closeSuffix;
         continue;
       }
 
-      // ── Opening tag (including self-closing) ─────────────────────────────
-      {
-        const openName = this._readTagName(source);
-        this._content += '<' + openName;
+      // Opening tag (including self-closing)
+      const openName = this._readTagName(source);
+      this._content += '<' + openName;
 
-        const { selfClosing, attrText } = this._readTagTail(source);
-        this._content += attrText;
+      const { selfClosing, attrText } = this._readTagTail(source);
+      this._content += attrText;
 
-        if (!selfClosing && openName === this._tagName) {
-          this._depth++;
-        }
-        continue;
+      if (!selfClosing && openName === this._tagName) {
+        this._depth++;
       }
     }
 
@@ -298,44 +276,174 @@ export class StopNodeProcessor {
     );
   }
 
+  // ── Strategy 3: Enclosure-only ─────────────────────────────────────────────
+
+  /**
+   * Enclosure skipping without depth tracking.
+   * Skips enclosure interiors; stops at the first `</tagName>` found outside them.
+   */
+  _collectEnclosureOnly(source) {
+    while (source.canRead()) {
+      // Enclosure openers take priority over everything else
+      const encIdx = this._matchEnclosureOpen(source);
+      if (encIdx !== -1) {
+        const enc = this._enclosures[encIdx];
+        this._skipChars(source, enc.open.length);
+        this._content += enc.open;
+        const interior = this._readUpto(source, enc.close);
+        this._content += interior + enc.close;
+        continue;
+      }
+
+      const ch = source.readChAt(0);
+
+      if (ch !== '<') {
+        this._content += source.readCh();
+        continue;
+      }
+
+      // At '<' outside any enclosure — check for our closing tag
+      const needed = '</' + this._tagName;
+      if (this._peekMatch(source, needed)) {
+        let offset = needed.length;
+        let validClose = false;
+        while (true) {
+          const c = source.readChAt(offset);
+          if (c === '>') { validClose = true; break; }
+          if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { offset++; continue; }
+          break;
+        }
+
+        if (validClose) {
+          this._skipChars(source, needed.length);
+          while (source.canRead()) {
+            const c = source.readCh();
+            if (c === '>') break;
+          }
+          return this._finish();
+        }
+      }
+
+      this._content += source.readCh();
+    }
+
+    throw new ParseError(
+      `Unclosed stop node <${this._tagName}> — unexpected end of input`,
+      ErrorCode.UNEXPECTED_END,
+    );
+  }
+
+  // ── Strategy 4: Full (nested + enclosures) ─────────────────────────────────
+
+  /**
+   * Full mode: enclosure skipping AND depth tracking.
+   * Enclosure interiors suppress all closing-tag and depth logic for their span.
+   * Depth tracks nested same-name open tags; the stop node ends at depth zero.
+   */
+  _collectFull(source) {
+    while (this._depth > 0) {
+      if (!source.canRead()) {
+        throw new ParseError(
+          `Unclosed stop node <${this._tagName}> — unexpected end of input`,
+          ErrorCode.UNEXPECTED_END,
+        );
+      }
+
+      // Enclosure openers take priority over tag scanning
+      const encIdx = this._matchEnclosureOpen(source);
+      if (encIdx !== -1) {
+        const enc = this._enclosures[encIdx];
+        this._skipChars(source, enc.open.length);
+        this._content += enc.open;
+        const interior = this._readUpto(source, enc.close);
+        this._content += interior + enc.close;
+        continue;
+      }
+
+      const ch = source.readChAt(0);
+
+      if (ch !== '<') {
+        this._content += source.readCh();
+        continue;
+      }
+
+      // Consume '<'
+      source.readCh();
+
+      if (!source.canRead()) {
+        throw new ParseError(
+          `Unclosed stop node <${this._tagName}> — unexpected end after '<'`,
+          ErrorCode.UNEXPECTED_END,
+        );
+      }
+
+      const c0 = source.readChAt(0);
+
+      if (c0 === '/') {
+        // Closing tag
+        source.readCh(); // consume '/'
+        const closeName = this._readTagName(source);
+        const closeSuffix = this._readToAngleClose(source);
+
+        if (closeName === this._tagName) {
+          this._depth--;
+          if (this._depth === 0) return this._finish();
+        }
+        this._content += '</' + closeName + closeSuffix;
+        continue;
+      }
+
+      // Opening tag (including self-closing)
+      const openName = this._readTagName(source);
+      this._content += '<' + openName;
+
+      const { selfClosing, attrText } = this._readTagTail(source);
+      this._content += attrText;
+
+      if (!selfClosing && openName === this._tagName) {
+        this._depth++;
+      }
+    }
+
+    /* istanbul ignore next */
+    throw new ParseError(
+      `Unclosed stop node <${this._tagName}> — unexpected end of input`,
+      ErrorCode.UNEXPECTED_END,
+    );
+  }
+
+  // ── Shared finish helper ───────────────────────────────────────────────────
+
+  /**
+   * Reset runtime state and return the accumulated content.
+   * Called by every strategy when the closing tag is confirmed.
+   * @returns {string}
+   */
+  _finish() {
+    const result = this._content;
+    this._active = false;
+    this._content = '';
+    this._depth = 1;
+    return result;
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   /**
    * Check whether any enclosure's `open` marker starts at the current source
    * position (without consuming). Returns the index of the first matching
    * enclosure, or -1 if none match.
-   *
-   * Enclosures are tested in array order — first match wins.
    */
   _matchEnclosureOpen(source) {
     for (let i = 0; i < this._enclosures.length; i++) {
-      const { open } = this._enclosures[i];
-      let match = true;
-      for (let j = 0; j < open.length; j++) {
-        if (source.readChAt(j) !== open[j]) { match = false; break; }
-      }
-      if (match) return i;
+      if (this._peekMatch(source, this._enclosures[i].open)) return i;
     }
     return -1;
   }
 
   /**
-   * Read characters until `stopChar` is reached (or input runs out).
-   * Does NOT consume `stopChar`. Returns accumulated text.
-   */
-  _readUntilChar(source, stopChar) {
-    let text = '';
-    while (source.canRead()) {
-      if (source.readChAt(0) === stopChar) break;
-      text += source.readCh();
-    }
-    return text;
-  }
-
-  /**
-   * Read until `stopStr` is found, consuming `stopStr`.
-   * Returns the text before `stopStr` (not including it).
-   * Throws UNEXPECTED_END if input runs out.
+   * Read until `stopStr` is found, consuming `stopStr` itself.
+   * Returns the text before `stopStr`. Throws UNEXPECTED_END if input runs out.
    */
   _readUpto(source, stopStr) {
     let text = '';
@@ -343,16 +451,9 @@ export class StopNodeProcessor {
     const sLen = stopStr.length;
 
     while (source.canRead()) {
-      const ch = source.readChAt(0);
-      if (ch === s0) {
-        let match = true;
-        for (let i = 1; i < sLen; i++) {
-          if (source.readChAt(i) !== stopStr[i]) { match = false; break; }
-        }
-        if (match) {
-          for (let i = 0; i < sLen; i++) source.readCh(); // consume stopStr
-          return text;
-        }
+      if (source.readChAt(0) === s0 && this._peekMatch(source, stopStr)) {
+        this._skipChars(source, sLen);
+        return text;
       }
       text += source.readCh();
     }
@@ -364,16 +465,7 @@ export class StopNodeProcessor {
   }
 
   /**
-   * Peek at the character `offset` positions ahead of the current source
-   * position, without consuming.
-   */
-  _peekCharAt(source, offset) {
-    return source.readChAt(offset);
-  }
-
-  /**
    * Check whether the source (starting at current position) starts with `str`.
-   * Position 0 of `str` is checked at readChAt(0), position 1 at readChAt(1), …
    * Does NOT consume.
    */
   _peekMatch(source, str) {

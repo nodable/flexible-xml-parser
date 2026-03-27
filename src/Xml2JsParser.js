@@ -52,14 +52,18 @@ export default class Xml2JsParser {
 
     this._unpairedSet = new Set(this.options.tags.unpaired);
 
-    // Pre-compile stopNodes as { expr: Expression, skipEnclosures: [] } objects.
-    // OptionsBuilder has already normalized each entry to { expression, skipEnclosures }.
+    // Pre-compile stopNodes as { expr, nested, skipEnclosures } objects.
+    // OptionsBuilder has already normalized each entry to { expression, nested, skipEnclosures }.
     this.stopNodeExpressions = [];
     for (const entry of this.options.tags.stopNodes) {
       const expr = entry.expression instanceof Expression
         ? entry.expression
         : new Expression(entry.expression);
-      this.stopNodeExpressions.push({ expr, skipEnclosures: entry.skipEnclosures });
+      this.stopNodeExpressions.push({
+        expr,
+        nested: entry.nested,
+        skipEnclosures: entry.skipEnclosures,
+      });
     }
   }
 
@@ -299,8 +303,11 @@ export default class Xml2JsParser {
       this.outputBuilder.closeTag(this.readonlyMatcher);
       this.matcher.pop();
     } else if (stopNodeConfig) {
-      // First encounter: create a fresh processor with the matching skipEnclosures.
-      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, stopNodeConfig.skipEnclosures);
+      // Create a fresh processor with the matching nested + skipEnclosures config.
+      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, {
+        nested: stopNodeConfig.nested,
+        skipEnclosures: stopNodeConfig.skipEnclosures,
+      });
       this._stopNodeProcessorMeta = { tagDetail };
       this._stopNodeProcessor.activate();
       const content = this._stopNodeProcessor.collect(this.source);
@@ -407,7 +414,7 @@ export default class Xml2JsParser {
   }
 
   /**
-   * Returns the matched stop-node config `{ expr, skipEnclosures }` if the
+   * Returns the matched stop-node config `{ expr, nested, skipEnclosures }` if the
    * current matcher position matches any stop-node expression, or `null` if not.
    */
   isStopNode() {

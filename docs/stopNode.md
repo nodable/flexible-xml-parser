@@ -143,16 +143,38 @@ entirely, use a custom `OutputBuilder` subclass.
 
 ## Depth tracking
 
-When `skipEnclosures` is non-empty, **depth tracking** is enabled automatically.  Nested
-same-name tags increment the depth counter; the stop node only ends when the matching closing
-tag brings the depth back to zero.
+You need to set `nested:true` to enable **depth tracking**. When enabled, nested
+same-name tags are considered while looking for closing tag.
 
-```xml
-<script>
-  var s = document.createElement('script');   <!-- depth still 1 -->
-  s.src = 'foo.js';
-</script>                                     <!-- depth → 0, collection ends -->
+```js
+const xmlData = `<root>
+      <stopNode>
+        <data>level 1</data>
+        <stopNode>
+          <data>level 2 - nested stopNode</data>
+        </stopNode>
+        <data>back to level 1</data>
+      </stopNode>
+    </root>`;
+
+    const parser = new XMLParser({
+      tags: {
+        stopNodes: [{ expression: "root.stopNode", nested: true }]
+      }
+    });
 ```
 
-When `skipEnclosures: []` (plain mode), depth tracking is **disabled** — the very first
-`</tagName>` ends collection regardless of nesting.
+output:
+```js
+{
+  "root": {
+    "stopNode": `
+        <data>level 1</data>
+        <stopNode>
+          <data>level 2 - nested stopNode</data>
+        </stopNode>
+        <data>back to level 1</data>
+      `
+  }
+}
+```

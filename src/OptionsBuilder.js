@@ -213,33 +213,42 @@ export const buildOptions = function (options) {
     finalOptions.OutputBuilder = new JsObjOutputBuilder();
   }
 
-  // Normalize stopNodes entries into { expression, skipEnclosures } objects.
+  // Normalize stopNodes entries into { expression, nested, skipEnclosures } objects.
   //
   // Accepted forms:
-  //   "..script"                         string  → { expression: compiled Expression, skipEnclosures: [] }
-  //   Expression instance                object  → { expression: Expression instance, skipEnclosures: [] }
-  //   { expression: "..script", skipEnclosures?: [] }  → { expression: compiled Expression, skipEnclosures: [...] }
-  //   { expression: Expression instance, skipEnclosures?: [] } → { expression: Expression instance, skipEnclosures: [...] }
+  //   "..script"
+  //     → { expression: "..script", nested: false, skipEnclosures: [] }
   //
-  // skipEnclosures is optional and defaults to [].
+  //   Expression instance
+  //     → { expression: Expression, nested: false, skipEnclosures: [] }
+  //
+  //   { expression: "..script", nested?: boolean, skipEnclosures?: [] }
+  //     → { expression: "..script", nested: boolean, skipEnclosures: [...] }
+  //
+  //   { expression: Expression, nested?: boolean, skipEnclosures?: [] }
+  //     → { expression: Expression, nested: boolean, skipEnclosures: [...] }
+  //
+  // `nested` defaults to false; `skipEnclosures` defaults to [].
+  // The two flags are fully independent — any combination is valid.
   if (Array.isArray(finalOptions.tags?.stopNodes)) {
     finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map((entry) => {
-      // Case 1: string → wrap in object with skipEnclosures
+      // Case 1: plain string shorthand
       if (typeof entry === 'string') {
-        return { expression: entry, skipEnclosures: [] };
+        return { expression: entry, nested: false, skipEnclosures: [] };
       }
 
-      // Case 2: object
+      // Case 2: object form
       if (entry && typeof entry === 'object') {
-        // Case 2a: entry is an Expression instance
+        // Case 2a: bare Expression instance — no extra options
         if (entry instanceof Expression) {
-          return { expression: entry, skipEnclosures: [] };
+          return { expression: entry, nested: false, skipEnclosures: [] };
         }
 
-        // Case 2b: entry is a config object { expression, skipEnclosures? }
+        // Case 2b: config object { expression, nested?, skipEnclosures? }
         if (entry.expression !== undefined) {
           return {
             expression: entry.expression,
+            nested: entry.nested === true,
             skipEnclosures: Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [],
           };
         }
@@ -251,7 +260,7 @@ export const buildOptions = function (options) {
       }
 
       throw new ParseError(
-        `Invalid stopNodes entry: expected a string, Expression, or { expression, skipEnclosures } object.`,
+        `Invalid stopNodes entry: expected a string, Expression, or { expression, nested?, skipEnclosures? } object.`,
         ErrorCode.INVALID_INPUT,
       );
     });
