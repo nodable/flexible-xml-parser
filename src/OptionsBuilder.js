@@ -44,7 +44,7 @@ export const defaultOptions = {
   tags: {
     unpaired: [],     // Tags that never have a closing tag (e.g. br, img, hr)
     stopNodes: [],    // Tag paths whose content is captured raw without parsing
-    valueParsers: ['replaceEntities', 'boolean', 'number'],
+    valueParsers: ['replaceEntities', 'number', 'boolean'],
   },
 
   // --- security ---

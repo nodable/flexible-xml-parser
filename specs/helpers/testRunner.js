@@ -73,6 +73,9 @@ export function frunAcrossAllInputSources(testName, xmlString, testFn, parserOpt
     });
   });
 }
+export function xrunAcrossAllInputSources(testName) {
+  xit(`${testName}`, function () { });
+}
 
 export function runAcrossAllInputSourcesWithException(testName, xmlString, errMsg, parserOptions = {}) {
   const inputTypes = ['string', 'buffer', 'feedable'];
