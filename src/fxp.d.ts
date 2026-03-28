@@ -617,16 +617,75 @@ export class JsObjBuilder implements OutputBuilderFactory {
   registerValueParser(name: string, parser: ValueParser): void;
 }
 
-export class JsArrBuilder implements OutputBuilderFactory {
-  constructor(options?: Partial<X2jOptions>);
-  getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
-  registerValueParser(name: string, parser: ValueParser): void;
+// ─── Base Output Builder ───────────────────────────────────────────────────────
+
+/**
+ * Constants for the `elementType` field in a value-parser context object.
+ * Discriminates between tag text values and attribute values.
+ */
+export declare const ElementType: {
+  readonly TAG: 'TAG';
+  readonly ATTRIBUTE: 'ATTRIBUTE';
+};
+
+/**
+ * Abstract base class for custom output builders.
+ * Extend this to implement a fully custom output representation.
+ *
+ * Subclasses must implement: `addTag`, `closeTag`, `addValue`, `getOutput`.
+ * Optionally override: `addAttribute`, `addComment`, `addCdata`, `addPi`,
+ * `addDeclaration`, `onStopNode`.
+ *
+ * @example
+ * import { BaseOutputBuilder } from 'flex-xml-parser';
+ * class MyBuilder extends BaseOutputBuilder { ... }
+ */
+export declare class BaseOutputBuilder implements OutputBuilderInstance {
+  constructor(readonlyMatcher?: any);
+  addAttribute(name: string, value: any, matcher: any): void;
+  parseValue(val: any, valParsers: Array<string | ValueParser>, context?: object): any;
+  addComment(text: string): void;
+  addCdata(text: string): void;
+  addRawValue(text: string): void;
+  addDeclaration(): void;
+  addPi(name: string): void;
+  addTag(tag: { name: string }, matcher: any): void;
+  closeTag(matcher: any): void;
+  addValue(text: string, matcher: any): void;
+  getOutput(): any;
+  registeredValParsers: Record<string, ValueParser>;
+  onStopNode?(
+    tagDetail: { name: string; line: number; col: number; index: number },
+    rawContent: string,
+    matcher: any,
+  ): void;
 }
 
-export class JsMinArrBuilder implements OutputBuilderFactory {
-  constructor(options?: Partial<X2jOptions>);
-  getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
-  registerValueParser(name: string, parser: ValueParser): void;
+// ─── Additional Value Parsers ──────────────────────────────────────────────────
+
+/**
+ * Extended boolean parser that also maps "yes"/"no"/"1"/"0" to booleans.
+ * Works on scalar strings and arrays of strings.
+ */
+export declare function booleanParserExt(val: string | string[]): boolean | string | (boolean | string)[];
+
+/**
+ * Join parser — joins an array of values into a single string.
+ * @param val  Array of values to join.
+ * @param by   Separator string. Default: `' '`
+ */
+export declare function joinParser(val: any[], by?: string): string | any[];
+
+/**
+ * Built-in `replaceEntities` value parser class.
+ * Registered automatically under the key `'replaceEntities'` in every
+ * OutputBuilder's `registeredValParsers` map.
+ *
+ * Import this type when you need to reference or subclass the parser directly.
+ */
+export declare class ReplaceEntitiesValueParser implements ValueParser {
+  constructor(entityParser: any);
+  parse(val: any, context?: object): any;
 }
 
 // ─── Stop-node utilities ───────────────────────────────────────────────────────
@@ -654,19 +713,4 @@ export declare const xmlEnclosures: ReadonlyArray<Enclosure>;
  * ```
  */
 export declare const quoteEnclosures: ReadonlyArray<Enclosure>;
-
-/**
- * Low-level stop-node content processor. Exported for advanced use cases
- * (e.g. custom OutputBuilder implementations that need to replay stop-node
- * collection with custom enclosure rules).
- *
- * Most users interact with this indirectly through `tags.stopNodes`.
- */
-export declare class StopNodeProcessor {
-  constructor(tagName: string, skipEnclosures?: Enclosure[]);
-  isActive(): boolean;
-  activate(): void;
-  resumeAfterOpenTag(): void;
-  collect(source: any): string;
-}
 

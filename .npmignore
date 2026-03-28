@@ -1,0 +1,14 @@
+# Unrelevant files and folders
+benchmark
+coverage
+spec
+static
+.*
+index.html
+webpack*
+lib
+temp*
+*todo.md
+docs*
+.nyc_output
+USERs.md
