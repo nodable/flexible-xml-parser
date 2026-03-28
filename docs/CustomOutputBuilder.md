@@ -26,7 +26,7 @@ class MyBuilder extends JsObjBuilder {
 const MyBuilderFactory = {
   getInstance(parserOptions) {
     const base = new JsObjOutputBuilder();
-    return new MyBuilder(parserOptions, base.options, { ...base.registeredParsers });
+    return new MyBuilder(parserOptions, base.options, { ...base.registeredValParsers });
   },
   registerValueParser(name, parser) {
     // implement if you need to register named value parsers on this factory
@@ -277,7 +277,7 @@ export function makeFactory(BuilderClass) {
   return {
     getInstance(parserOptions) {
       const base = new JsObjOutputBuilder();
-      return new BuilderClass(parserOptions, base.options, { ...base.registeredParsers });
+      return new BuilderClass(parserOptions, base.options, { ...base.registeredValParsers });
     },
     registerValueParser(name, parser) {},
   };

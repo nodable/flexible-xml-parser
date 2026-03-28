@@ -93,7 +93,7 @@ describe("Output Builders", function () {
       const factory = {
         getInstance(parserOptions) {
           const base = new JsObjOutputBuilder();
-          const parsers = { ...base.registeredParsers };
+          const parsers = { ...base.registeredValParsers };
           return new CustomBuilder(parserOptions, base.options, parsers);
         },
         registerValueParser() { },

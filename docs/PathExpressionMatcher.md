@@ -253,7 +253,7 @@ class MigrationBuilder extends JsObjBuilder {
 const factory = {
   getInstance(parserOptions) {
     const base = new JsObjOutputBuilder();
-    return new MigrationBuilder(parserOptions, base.options, { ...base.registeredParsers });
+    return new MigrationBuilder(parserOptions, base.options, { ...base.registeredValParsers });
   },
   registerValueParser(name, p) {},
 };

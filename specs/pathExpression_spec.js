@@ -22,7 +22,7 @@ function makeFactory(BuilderSubclass) {
   return {
     getInstance(parserOptions) {
       const base = new JsObjOutputBuilder();
-      return new BuilderSubclass(parserOptions, base.options, { ...base.registeredParsers });
+      return new BuilderSubclass(parserOptions, base.options, { ...base.registeredValParsers });
     },
     registerValueParser(name, parser) { },
   };

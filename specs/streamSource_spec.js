@@ -177,7 +177,7 @@ describe('parseStream — parser options', () => {
     const CustomBuilder = {
       getInstance() {
         return {
-          registeredParsers: {},
+          registeredValParsers: {},
           addTag(tag) { counts[tag.name] = (counts[tag.name] || 0) + 1; },
           closeTag() { },
           addValue() { },

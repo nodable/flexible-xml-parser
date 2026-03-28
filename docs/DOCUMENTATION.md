@@ -535,7 +535,7 @@ class EventBuilder extends BaseOutputBuilder {
   getInstance(parserOptions) {
     const inst = new EventBuilder();
     inst.options = parserOptions;
-    inst.registeredParsers = {};
+    inst.registeredValParsers = {};
     return inst;
   }
 

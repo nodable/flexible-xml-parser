@@ -7,26 +7,26 @@ const rootName = '^';
 export default class OutputBuilder {
   constructor(builderOptions) {
     this.options = buildOptions(builderOptions);
-    this.registeredParsers = registerCommonValueParsers(this.options);
+    this.registeredValParsers = registerCommonValueParsers(this.options);
   }
 
   registerValueParser(name, parserInstance) {
-    this.registeredParsers[name] = parserInstance;
+    this.registeredValParsers[name] = parserInstance;
   }
 
-  getInstance(parserOptions) {
-    let parsers = { ...this.registeredParsers };
+  getInstance(parserOptions, readonlyMatcher) {
+    let valParsers = { ...this.registeredValParsers };
     if (parserOptions && parserOptions.numberParseOptions) {
-      parsers['number'] = new numParser(parserOptions.numberParseOptions);
+      valParsers['number'] = new numParser(parserOptions.numberParseOptions);
     }
-    return new JsObjBuilder(parserOptions, this.options, parsers);
+    return new JsObjBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
 
 class JsObjBuilder extends BaseOutputBuilder {
 
-  constructor(parserOptions, builderOptions, registeredParsers) {
-    super();
+  constructor(parserOptions, builderOptions, registeredValParsers, readonlyMatcher) {
+    super(readonlyMatcher);
     this.tagsStack = [];
 
     this.options = {
@@ -56,7 +56,7 @@ class JsObjBuilder extends BaseOutputBuilder {
       forceTextNode: builderOptions?.forceTextNode ?? false,
     };
 
-    this.registeredParsers = registeredParsers;
+    this.registeredValParsers = registeredValParsers;
 
     this.root = {};
     this.parent = this.root;
@@ -66,7 +66,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     this.attributes = {};
   }
 
-  addTag(tag, matcher) {
+  addTag(tag) {
     let value = "";
     if (!isEmpty(this.attributes)) {
       if (this.options.attributes.groupBy) {
@@ -92,15 +92,14 @@ class JsObjBuilder extends BaseOutputBuilder {
    *
    * @param {TagDetail} tagDetail  - Name, line, col, index of the stop node.
    * @param {string}    rawContent - Raw unparsed content between the tags.
-   * @param {ReadonlyMatcher} matcher - Read-only path matcher for the stop node.
    */
-  onStopNode(tagDetail, rawContent, matcher) {
+  onStopNode(tagDetail, rawContent) {
     if (typeof this.options.onStopNode === 'function') {
-      this.options.onStopNode(tagDetail, rawContent, matcher);
+      this.options.onStopNode(tagDetail, rawContent, this.matcher);
     }
   }
 
-  closeTag(matcher) {
+  closeTag() {
     const tagName = this.tagName;
     let value = this.value;
     const textValue = this.textValue;
@@ -132,7 +131,7 @@ class JsObjBuilder extends BaseOutputBuilder {
       elementName: tagName,
       elementValue: textValue,
       elementType: ElementType.TAG,
-      matcher: matcher,
+      matcher: this.matcher,
       isLeafNode: isLeafNode,
     };
 
@@ -170,7 +169,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     let resultTag = { tagName, value };
 
     if (this.options.onTagClose !== undefined) {
-      resultTag = this.options.onTagClose(tagName, value, textValue, matcher);
+      resultTag = this.options.onTagClose(tagName, value, textValue, this.matcher);
       if (!resultTag) return;
     }
 
@@ -178,7 +177,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     let parentTag = arr[2];
 
     // Check if this tag should be forced into an array
-    const shouldForceArray = this.options.forceArray(matcher, isLeafNode);
+    const shouldForceArray = this.options.forceArray(this.matcher, isLeafNode);
 
     parentTag = this._addChildTo(resultTag.tagName, resultTag.value, parentTag, shouldForceArray);
 
@@ -216,7 +215,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     return node;
   }
 
-  addValue(text, matcher) {
+  addValue(text) {
     if (this.textValue.length > 0) this.textValue += this.options.textJoint + text;
     else this.textValue = text;
   }

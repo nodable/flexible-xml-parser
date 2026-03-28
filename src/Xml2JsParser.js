@@ -89,11 +89,12 @@ export default class Xml2JsParser {
    * shares the same entity table (including DocType entities collected during parsing).
    */
   _createOutputBuilder() {
-    const inst = this.options.OutputBuilder.getInstance(this.options);
+    const inst = this.options.OutputBuilder.getInstance(this.options, this.readonlyMatcher);
 
     // Register under 'replaceEntities' — the canonical value parser key.
+    //TODO: this seems wrong place of setting them. What if 
     const vp = new ReplaceEntitiesValueParser(this.entityParser);
-    inst.registeredParsers['replaceEntities'] = vp;
+    inst.registeredValParsers['replaceEntities'] = vp;
 
     return inst;
   }

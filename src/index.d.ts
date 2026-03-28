@@ -524,7 +524,7 @@ export interface OutputBuilderInstance {
   addDeclaration(): void;
   addPi(name: string): void;
   getOutput(): any;
-  registeredParsers: Record<string, ValueParser>;
+  registeredValParsers: Record<string, ValueParser>;
   /**
    * Optional hook called by the parser when a stop node is fully collected.
    * Implement this in custom OutputBuilder classes to handle stop-node content.

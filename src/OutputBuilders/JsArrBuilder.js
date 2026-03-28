@@ -10,26 +10,26 @@ const rootName = '!js_arr';
 export default class OutputBuilder {
   constructor(options) {
     this.options = buildOptions(options);
-    this.registeredParsers = registerCommonValueParsers(this.options);
+    this.registeredValParsers = registerCommonValueParsers(this.options);
   }
 
   registerValueParser(name, parserInstance) {
-    this.registeredParsers[name] = parserInstance;
+    this.registeredValParsers[name] = parserInstance;
   }
 
-  getInstance(parserOptions) {
-    let parsers = { ...this.registeredParsers };
+  getInstance(parserOptions, readonlyMatcher) {
+    let valParsers = { ...this.registeredValParsers };
     if (parserOptions && parserOptions.numberParseOptions) {
-      parsers['number'] = new numParser(parserOptions.numberParseOptions);
+      valParsers['number'] = new numParser(parserOptions.numberParseOptions);
     }
-    return new JsArrBuilder(parserOptions, this.options, parsers);
+    return new JsArrBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
 
 class JsArrBuilder extends BaseOutputBuilder {
 
-  constructor(parserOptions, builderOptions, registeredParsers) {
-    super();
+  constructor(parserOptions, builderOptions, registeredValParsers, readonlyMatcher) {
+    super(readonlyMatcher);
     this.tagsStack = [];
     this.parserOptions = parserOptions;
 
@@ -43,7 +43,7 @@ class JsArrBuilder extends BaseOutputBuilder {
       compactLeaf: builderOptions.compactLeaf === true
     };
 
-    this.registeredParsers = registeredParsers;
+    this.registeredValParsers = registeredValParsers;
 
     this.root = new Node(rootName);
     this.currentNode = this.root;
@@ -51,7 +51,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     this._pendingStopNode = false;
   }
 
-  addTag(tag, matcher) {
+  addTag(tag) {
     this.tagsStack.push(this.currentNode);
     this.currentNode = new Node(tag.name, this.attributes);
     this.attributes = {};
@@ -62,16 +62,15 @@ class JsArrBuilder extends BaseOutputBuilder {
    *
    * @param {TagDetail}       tagDetail  - name, line, col, index of the stop node
    * @param {string}          rawContent - raw unparsed content between the tags
-   * @param {ReadonlyMatcher} matcher    - read-only path matcher
    */
-  onStopNode(tagDetail, rawContent, matcher) {
+  onStopNode(tagDetail, rawContent) {
     this._pendingStopNode = true;
     if (typeof this.options.onStopNode === 'function') {
-      this.options.onStopNode(tagDetail, rawContent, matcher);
+      this.options.onStopNode(tagDetail, rawContent, this.matcher);
     }
   }
 
-  closeTag(matcher) {
+  closeTag() {
     const node = this.currentNode;
     this.currentNode = this.tagsStack.pop();
 
@@ -80,7 +79,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     this._pendingStopNode = false;
 
     if (this.options.onClose !== undefined) {
-      const resultTag = this.options.onClose(node, matcher);
+      const resultTag = this.options.onClose(node, this.matcher);
       if (resultTag) return;
     }
 
@@ -109,13 +108,13 @@ class JsArrBuilder extends BaseOutputBuilder {
     this.currentNode.child.push({ [key]: val });
   }
 
-  addValue(text, matcher) {
+  addValue(text) {
     const tagName = this.currentNode?.tagname;
     const context = {
       elementName: tagName,
       elementValue: text,
       elementType: ElementType.TAG,
-      matcher: matcher,
+      matcher: this.matcher,
       isLeafNode: this.currentNode?.child?.length === 0,
     };
     this.currentNode.child.push({

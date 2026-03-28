@@ -8,7 +8,7 @@
  * on the parser — see EntitiesParser for the full option reference.
  *
  * The EntitiesParser instance is created by Xml2JsParser and injected into
- * the OutputBuilder's registeredParsers map under the key 'replaceEntities'.
+ * the OutputBuilder's registeredValParsers map under the key 'replaceEntities'.
  * This sharing ensures DocType entities collected during parsing are available
  * to the value parser chain.
  */

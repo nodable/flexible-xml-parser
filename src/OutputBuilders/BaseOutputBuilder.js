@@ -11,6 +11,10 @@ export const ElementType = Object.freeze({
 
 export default class BaseOutputBuilder {
 
+  constructor(readonlyMatcher) {
+    this.matcher = readonlyMatcher || null;
+  }
+
   /**
    * Add a parsed attribute to the current tag.
    * Only called when skip.attributes is false.
@@ -54,7 +58,7 @@ export default class BaseOutputBuilder {
     for (let i = 0; i < valParsers.length; i++) {
       let parser = valParsers[i];
       if (typeof parser === 'string') {
-        parser = this.registeredParsers[parser];
+        parser = this.registeredValParsers[parser];
       }
       if (parser) {
         val = parser.parse(val, context);
