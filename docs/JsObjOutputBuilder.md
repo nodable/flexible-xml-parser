@@ -39,7 +39,46 @@ Output
 }
 ```
 
-### 2. `forceTextNode` Option
+### 2. `alwaysArray` Option
+
+**Type:** `string[] | Expression[]`
+
+Forces specific XML tags to always be represented as arrays, even when only a single occurrence exists. This ensures consistent data structures in your parsed output.
+
+**Key Benefits:**
+
+- Prevents code breaking when XML structure changes (single → multiple elements)
+- Simplifies array processing logic in consuming code
+- Supports path-based, attribute-based, and leaf-node-based decisions
+
+```js
+const inputXml = `<catalog><book>Title</book></catalog>`;
+
+const parser = new XMLParser({
+  OutputBuilder: new JsObjOutputBuilder({
+    alwaysArray: ["..item", new Expression('root.product')]
+  }),
+});
+
+const result = parser.parse(inputXml);
+```
+
+Output
+```json
+{
+  "catalog": {
+    "book": [
+      {
+        "title": "Title"
+      }
+    ]
+  }
+}
+```
+
+Please note that if `alwaysArray` or `forceArray` returns true for a tag then it'll be array. Similarly if any one of then returns false for a tag then it'll not be array.
+
+### 3. `forceTextNode` Option
 
 **Type:** `boolean`
 

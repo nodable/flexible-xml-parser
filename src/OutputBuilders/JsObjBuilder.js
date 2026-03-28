@@ -1,6 +1,7 @@
 import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
 import numParser from '../ValueParsers/number.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
+import { Expression } from 'path-expression-matcher';
 
 const rootName = '^';
 
@@ -8,6 +9,13 @@ export default class OutputBuilder {
   constructor(builderOptions) {
     this.options = buildOptions(builderOptions);
     this.registeredValParsers = registerCommonValueParsers(this.options);
+
+    // Pre-compile any string expressions in alwaysArray to Expression objects once
+    if (this.options.alwaysArray) {
+      this.options.alwaysArray = this.options.alwaysArray.map(entry =>
+        typeof entry === 'string' ? new Expression(entry) : entry
+      );
+    }
   }
 
   registerValueParser(name, parserInstance) {
@@ -43,9 +51,19 @@ class JsObjBuilder extends BaseOutputBuilder {
        * Called with (matcher, isLeafNode) where:
        * - matcher: ReadOnlyMatcher - path matcher for current tag
        * - isLeafNode: boolean|null - null when not yet determinable
-       * Returns: boolean - true to force array, false otherwise
+       * Returns: boolean - true to force array, false to veto, undefined to abstain
        */
-      forceArray: builderOptions?.forceArray || ((matcher, isLeafNode) => false),
+      forceArray: builderOptions?.forceArray || null,
+
+      /**
+       * Array of strings (tag names) or Expression objects.
+       * Any match votes true; no match abstains (does not veto).
+       * Combined with forceArray using equal-priority voting:
+       * - Either explicit false → false (veto wins)
+       * - Any true, none false → true
+       * - All abstain → false (default)
+       */
+      alwaysArray: builderOptions?.alwaysArray || [],
 
       /**
        * Boolean flag that forces creation of a text node for every tag.
@@ -97,6 +115,45 @@ class JsObjBuilder extends BaseOutputBuilder {
     if (typeof this.options.onStopNode === 'function') {
       this.options.onStopNode(tagDetail, rawContent, this.matcher);
     }
+  }
+
+  /**
+   * Combines votes from `alwaysArray` and `forceArray` with equal priority.
+   *
+   * Voting rules:
+   *   - `alwaysArray`: true if any entry matches, undefined (abstain) if none match.
+   *     It never votes false — no match is not a veto.
+   *   - `forceArray`: returns true / false / undefined directly.
+   *
+   * Resolution:
+   *   - Any voter returns explicit false  → false  (veto wins)
+   *   - Any voter returns true, none false → true
+   *   - All abstain (undefined)            → false  (default)
+   *
+   * @param {boolean|null} isLeafNode
+   * @returns {boolean}
+   */
+  _resolveForceArray(isLeafNode) {
+    // --- alwaysArray vote ---
+    let alwaysVote; // undefined = abstain
+    const alwaysArray = this.options.alwaysArray;
+    const matched = alwaysArray.some(entry => this.matcher.matches(entry));
+    if (matched) alwaysVote = true;
+    // no match → alwaysVote stays undefined (abstain, not false)
+
+    // --- forceArray vote ---
+    let forceVote; // undefined = abstain
+    if (typeof this.options.forceArray === 'function') {
+      const result = this.options.forceArray(this.matcher, isLeafNode);
+      if (result === true) forceVote = true;
+      else if (result === false) forceVote = false;
+      // anything else (undefined, null, …) → abstain
+    }
+
+    // --- resolution ---
+    if (alwaysVote === false || forceVote === false) return false; // veto
+    else if (alwaysVote === true || forceVote === true) return true;  // at least one yes
+    return false; // all abstain → default
   }
 
   closeTag() {
@@ -177,7 +234,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     let parentTag = arr[2];
 
     // Check if this tag should be forced into an array
-    const shouldForceArray = this.options.forceArray(this.matcher, isLeafNode);
+    const shouldForceArray = this._resolveForceArray(isLeafNode);
 
     parentTag = this._addChildTo(resultTag.tagName, resultTag.value, parentTag, shouldForceArray);
 

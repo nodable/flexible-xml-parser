@@ -412,13 +412,9 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       `<root><item>Value</item></root>`,
       (result) => {
         const expected = {
-          "root": [
-            {
-              "item": [
-                "Value"
-              ]
-            }
-          ]
+          "root": {
+            "item": "Value"
+          }
         };
         // Truthy value should work
         expect(result).toEqual(expected);
@@ -512,25 +508,153 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       }
     );
 
+  });
+
+  describe("alwaysArray option - JsObjBuilder", function () {
+
     runAcrossAllInputSources(
-      "should work correctly with mixed content",
+      "should force single tag into array using string name",
       `
         <root>
-          <forceArray>Single</forceArray>
-          <normal>Value</normal>
-          <forceArray>Another</forceArray>
+          <item>Single</item>
         </root>`,
       (result) => {
-        expect(Array.isArray(result.root.forceArray)).toBe(true);
-        expect(result.root.forceArray.length).toBe(2);
-        expect(result.root.normal).toBe("Value");
+        expect(Array.isArray(result.root.item)).toBe(true);
+        expect(result.root.item[0]).toBe("Single");
       },
       {
-
         OutputBuilder: new JsObjOutputBuilder({
-          forceArray: (matcher, isLeafNode) => {
-            return matcher.matches(new Expression('root.forceArray'));
-          }
+          alwaysArray: ["..item"]
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "should force tag into array using Expression",
+      `
+        <root>
+          <item>Single</item>
+        </root>`,
+      (result) => {
+        expect(Array.isArray(result.root.item)).toBe(true);
+        expect(result.root.item[0]).toBe("Single");
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: [new Expression('root.item')]
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "should support mixed array of strings and Expressions",
+      `
+        <root>
+          <item>Value</item>
+          <product>Widget</product>
+        </root>`,
+      (result) => {
+        expect(Array.isArray(result.root.item)).toBe(true);
+        expect(result.root.item[0]).toBe("Value");
+        expect(Array.isArray(result.root.product)).toBe(true);
+        expect(result.root.product[0]).toBe("Widget");
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: ["..item", new Expression('root.product')]
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "should not affect tags not listed in alwaysArray",
+      `
+        <root>
+          <item>Forced</item>
+          <other>Normal</other>
+        </root>`,
+      (result) => {
+        expect(Array.isArray(result.root.item)).toBe(true);
+        expect(result.root.other).toBe("Normal");
+        expect(Array.isArray(result.root.other)).toBe(false);
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: ["..item"]
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "forceArray explicit false should veto alwaysArray match",
+      `
+        <root>
+          <item>Value</item>
+        </root>`,
+      (result) => {
+        // alwaysArray votes true for 'item', but forceArray vetoes with explicit false
+        expect(Array.isArray(result.root.item)).toBe(false);
+        expect(result.root.item).toBe("Value");
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: ["..item"],
+          forceArray: (matcher, isLeafNode) => false  // explicit veto
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "forceArray returning true should work without alwaysArray",
+      `
+        <root>
+          <item>Value</item>
+        </root>`,
+      (result) => {
+        // forceArray alone still works — absent alwaysArray abstains, not vetoes
+        expect(Array.isArray(result.root.item)).toBe(true);
+        expect(result.root.item[0]).toBe("Value");
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          forceArray: (matcher, isLeafNode) => matcher.matches(rootItemExp)
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "alwaysArray true with forceArray returning undefined should return true",
+      `
+        <root>
+          <item>Value</item>
+        </root>`,
+      (result) => {
+        // alwaysArray votes true, forceArray abstains → true
+        expect(Array.isArray(result.root.item)).toBe(true);
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: ["..item"],
+          forceArray: (matcher, isLeafNode) => undefined  // abstain
+        })
+      }
+    );
+
+    runAcrossAllInputSources(
+      "both alwaysArray and forceArray abstaining should return false",
+      `
+        <root>
+          <item>Value</item>
+        </root>`,
+      (result) => {
+        // alwaysArray doesn't match 'item', forceArray returns undefined → all abstain → false
+        expect(Array.isArray(result.root.item)).toBe(false);
+        expect(result.root.item).toBe("Value");
+      },
+      {
+        OutputBuilder: new JsObjOutputBuilder({
+          alwaysArray: ["other"],       // doesn't match 'item'
+          forceArray: () => undefined   // abstain
         })
       }
     );
