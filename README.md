@@ -1,33 +1,34 @@
-# Flex XML Parser
+# Flexible XML Parser
 
-A flexible, high-performance XML parser for Node.js with pluggable output builders and a composable value parser chain.
+A flexible, high-performance XML parser for Node.js with pluggable output builders, a composable value parser chain, and multiple input modes.
 
 ## Features
 
-- ✅ **Clean option design** — grouped options: `skip`, `nameFor`, `attributes`, `tags`, `entityParseOptions`
-- ✅ **Entity expansion as a ValueParser** — `'entities'` / `'htmlEntities'` in the chain; remove to disable
-- ✅ **No default trimming** — whitespace preserved unless you add `'trim'` to `valueParsers`
-- ✅ **Pluggable Output Builders** — `JsObjBuilder`, `JsArrBuilder`, `JsMinArrBuilder`, or your own
-- ✅ **Context-aware ValueParsers** — each parser receives `{ tagName, isAttribute, attrName? }`
-- ✅ **Security** — entity limits, prototype-pollution prevention, option-level name validation
-- ✅ **TypeScript definitions** — complete type support
-- ✅ **ES Modules** — modern JavaScript
+- **Multiple input modes** — string, Buffer, Uint8Array, Node.js streams, and incremental feed/end API. More can be created easily.
+- **Pluggable output builders** — swap `JsObjBuilder` for `JsArrBuilder`, `OrderedKeyValueBuilder`, or your own subclass of `BaseOutputBuilder`
+- **Composable value parser chain** — built-in parsers for entities, numbers, booleans, trim, and currency; custom parsers receive full context
+- **Path-expression stop nodes** — capture raw content inside matched tags (e.g. `<script>`, `<style>`) without further XML parsing; configurable enclosure skipping for nested quotes and comments
+- **Entity expansion control** — built-in XML entities, optional HTML entities, external/registered entities, DocType-declared entities; all with DoS-prevention limits
+- **Auto-close for lenient HTML parsing** — configurable recovery from unclosed tags and mismatched close tags; collect parse errors without throwing
+- **DoS protection** — configurable limits on nesting depth, attributes per tag, entity count, entity size, and total expansion length
+- **Security** — prototype-pollution prevention; reserved names throw; dangerous names are sanitised by default
+- **TypeScript definitions** — complete dual-mode types (`fxp.d.ts` for ESM, `fxp.d.cts` for CJS)
+- **ES Modules + CommonJS** — `"type": "module"` source with a bundled CJS output
 
 ## Installation
 
 ```bash
-npm install flex-xml-parser
+npm install flexible-xml-parser
 ```
 
 ## Quick Start
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from 'flexible-xml-parser';
 
-// Default: type-coerces values, expands entities, skips attributes
 const parser = new XMLParser();
-const result = parser.parse('<root><n>42</n><flag>true</flag></root>');
-// { root: { n: 42, flag: true } }
+const result = parser.parse('<root><count>3</count><active>true</active></root>');
+// { root: { count: 3, active: true } }
 
 // Enable attributes
 const parser2 = new XMLParser({ skip: { attributes: false } });
@@ -35,25 +36,44 @@ parser2.parse('<item id="1">hello</item>');
 // { item: { '@_id': 1, '#text': 'hello' } }
 ```
 
-## Option structure
+## Input modes
 
 ```javascript
-{
+// String or Buffer
+parser.parse('<root/>');
+parser.parse(Buffer.from('<root/>'));
+
+// Typed array
+parser.parseBytesArr(new Uint8Array([...]));
+
+// Node.js Readable stream — memory stays proportional to the largest token,
+// not the total document size
+const result = await parser.parseStream(fs.createReadStream('large.xml'));
+
+// Incremental feed — useful for WebSocket / chunked HTTP
+parser.feed('<root>');
+parser.feed('<item>1</item>');
+const result = parser.end();
+```
+
+## Options
+
+```javascript
+new XMLParser({
   // What to exclude from output
   skip: {
-    attributes:  true,   // ← set false to parse attributes
-    nsPrefix:    false,  // strip ns: prefixes
+    attributes:  true,   // set false to parse attributes (default: true)
+    nsPrefix:    false,  // strip ns:tag → tag (default: false)
     declaration: false,
     pi:          false,
     cdata:       false,
     comment:     false,
-    docType:     true,   // always parsed for entities; never emitted
   },
 
   // Property names for special nodes
   nameFor: {
-    text:    '#text',  // mixed-content text
-    cdata:   '',       // '' = merge into text; '#cdata' = separate property
+    text:    '#text',  // mixed-content text property
+    cdata:   '',       // '' = merge CDATA into text; '#cdata' = separate key
     comment: '',       // '' = omit; '#comment' = capture
   },
 
@@ -61,98 +81,204 @@ parser2.parse('<item id="1">hello</item>');
   attributes: {
     prefix:       '@_',
     suffix:       '',
-    groupBy:      '',
-    booleanType:  false,
-    valueParsers: ['entities', 'number', 'boolean'],
+    groupBy:      '',     // group all attributes under this key; '' = inline
+    booleanType:  false,  // allow valueless attributes (treated as true)
+    valueParsers: ['replaceEntities', 'number', 'boolean'],
   },
 
   // Tag value options
   tags: {
-    unpaired:     [],
-    stopNodes:    [],
-    valueParsers: ['entities', 'boolean', 'number'],
-    //             ↑ remove 'entities' to disable expansion
-    //               add 'trim' to strip whitespace
-    //               use 'htmlEntities' for &nbsp; &copy; etc.
-  },
-
-  // Entity security limits (DocType declaration phase)
-  entityParseOptions: {
-    maxCount: 100, maxSize: 10000, maxExpansions: 1000, ...
+    unpaired:     [],     // self-closing tags without / (e.g. ['br', 'img'])
+    stopNodes:    [],     // paths whose content is captured raw (see below)
+    valueParsers: ['replaceEntities', 'number', 'boolean'],
   },
 
   numberParseOptions: { hex: true, leadingZeros: true, eNotation: true },
 
-  OutputBuilder: null,  // default: JsObjBuilder
-}
+  // Entity sources and security limits
+  entityParseOptions: {
+    default:            true,    // built-in XML entities (lt, gt, amp, …)
+    html:               false,   // HTML named entities (&nbsp;, &copy;, …)
+    external:           true,    // entities added via parser.addEntity()
+    docType:            false,   // entities declared in DOCTYPE internal subset
+    maxEntityCount:     100,
+    maxEntitySize:      10000,
+    maxTotalExpansions: 1000,
+    maxExpandedLength:  100000,
+  },
+
+  // DoS prevention
+  limits: {
+    maxNestedTags:       null,   // max tag nesting depth
+    maxAttributesPerTag: null,   // max attributes on a single tag
+  },
+
+  // Lenient HTML-mode recovery
+  autoClose: null,  // null = strict; 'html' = recover from unclosed/mismatched tags
+
+  // Pluggable output builder (default: JsObjBuilder)
+  OutputBuilder: null,
+});
 ```
 
 ## Value parsers
 
-Built-in parsers: `'entities'`, `'htmlEntities'`, `'trim'`, `'boolean'`, `'number'`, `'currency'`.
+Built-in chain names: `'replaceEntities'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
 
 ```javascript
 // Disable entity expansion
-new XMLParser({ tags: { valueParsers: ['boolean', 'number'] } });
+new XMLParser({ tags: { valueParsers: ['number', 'boolean'] } });
 
-// HTML entities + trim
-new XMLParser({ tags: { valueParsers: ['htmlEntities', 'trim', 'boolean', 'number'] } });
+// HTML entities + trim whitespace
+new XMLParser({
+  tags: { valueParsers: ['replaceEntities', 'trim', 'number', 'boolean'] },
+  entityParseOptions: { html: true },
+});
 
-// All raw strings
+// All values as raw strings
 new XMLParser({ tags: { valueParsers: [] }, attributes: { valueParsers: [] } });
 ```
 
-Custom parsers receive `(val, context)` — context contains `{ tagName, isAttribute, attrName? }`:
+Custom parsers receive `(val, context)` where context carries `{ elementName, elementValue, elementType, matcher, isLeafNode }`:
 
 ```javascript
 class PriceParser {
-  parse(val, { tagName }) {
-    return tagName === 'price' ? parseFloat(val) : val;
+  parse(val, context) {
+    return context.elementName === 'price' ? parseFloat(val) : val;
   }
 }
 
 new XMLParser({
-  tags: { valueParsers: ['entities', new PriceParser(), 'boolean'] },
+  tags: { valueParsers: ['replaceEntities', new PriceParser(), 'boolean'] },
 });
 ```
 
-## Security
+Register a reusable custom parser by name via `JsObjBuilder`:
 
 ```javascript
-// Limit DocType entities for untrusted XML
-new XMLParser({ entityParseOptions: { maxCount: 20, maxSize: 500 } });
+import { JsObjBuilder } from 'flexible-xml-parser';
 
-// Disable expansion entirely (safest)
-new XMLParser({ tags: { valueParsers: ['boolean', 'number'] } });
+const builder = new JsObjBuilder();
+builder.registerValueParser('price', new PriceParser());
+
+new XMLParser({
+  tags:          { valueParsers: ['replaceEntities', 'price', 'boolean'] },
+  OutputBuilder: builder,
+});
 ```
 
-Critical names (`__proto__`, `constructor`, `prototype`) always throw. Dangerous names are sanitised with `__` prefix by default.
+## Stop nodes
+
+Stop nodes capture raw content without further XML parsing — useful for `<script>`, `<style>`, or embedded HTML fragments.
+
+```javascript
+import { xmlEnclosures, quoteEnclosures } from 'flexible-xml-parser';
+
+new XMLParser({
+  tags: {
+    stopNodes: [
+      '..script',                          // plain — first </script> ends collection
+      { expression: 'body..pre',   skipEnclosures: [...xmlEnclosures] },
+      { expression: 'head..style', skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] },
+    ],
+  },
+  onStopNode(tagDetail, rawContent, matcher) {
+    console.log(tagDetail.name, rawContent);
+  },
+});
+```
+
+`xmlEnclosures` covers XML comments and CDATA; `quoteEnclosures` covers single-quote, double-quote, and template literals.
+
+## Pluggable output builders
+
+```javascript
+import XMLParser, { JsObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
+
+// JsObjBuilder — default JS object output with extra options
+const builder = new JsObjBuilder({
+  alwaysArray:   ['item'],           // tag names or path expressions always wrapped in []
+  forceArray:    (matcher) => ...,   // function-based array forcing
+  forceTextNode: false,              // always emit nameFor.text even for text-only tags
+  textJoint:     '',                 // join string when text spans multiple text nodes
+});
+
+new XMLParser({ OutputBuilder: builder });
+
+// Custom builder by extending BaseOutputBuilder
+class MyBuilder extends BaseOutputBuilder {
+  addTag(tag, matcher)    { /* … */ }
+  closeTag(matcher)       { /* … */ }
+  addValue(text, matcher) { /* … */ }
+  getOutput()             { return this.result; }
+}
+```
+
+## Auto-close (lenient HTML parsing)
+
+```javascript
+// 'html' preset: recover from unclosed tags and mismatched close tags
+const parser = new XMLParser({ autoClose: 'html' });
+const result = parser.parse('<div><p>text<br></div>');
+
+const errors = parser.getParseErrors();
+// [{ type: 'unclosed-eof', tag: 'p', line: 1, col: … }, …]
+```
+
+Fine-grained control:
+
+```javascript
+new XMLParser({
+  autoClose: {
+    onEof:         'closeAll',  // 'throw' | 'closeAll'
+    onMismatch:    'recover',   // 'throw' | 'recover' | 'discard'
+    collectErrors: true,
+  },
+});
+```
+
+## Error handling
+
+```javascript
+import XMLParser, { ParseError, ErrorCode } from 'flexible-xml-parser';
+
+try {
+  parser.parse(xml);
+} catch (e) {
+  if (e instanceof ParseError) {
+    console.error(e.code, e.line, e.col, e.message);
+    // e.g. 'MISMATCHED_CLOSE_TAG' 4 12 'Expected </div>, got </span>'
+  } else {
+    throw e;
+  }
+}
+```
+
+All error codes are available on the `ErrorCode` constant for exhaustive matching without string literals.
+
+## Custom entities
+
+```javascript
+parser.addEntity('copy', '©');
+parser.addEntity('trade', '™');
+// requires entityParseOptions.external: true (default)
+```
 
 ## TypeScript
 
 ```typescript
-import XMLParser, { X2jOptions } from 'flex-xml-parser';
+import XMLParser, { X2jOptions, JsObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
 
 const options: X2jOptions = {
   skip:    { attributes: false, nsPrefix: true },
   nameFor: { cdata: '#cdata' },
-  tags:    { valueParsers: ['entities', 'trim', 'boolean', 'number'] },
+  tags:    { valueParsers: ['replaceEntities', 'trim', 'number', 'boolean'] },
+  limits:  { maxNestedTags: 100 },
 };
+
+const parser = new XMLParser(options);
 ```
-
-## Streaming
-
-```javascript
-// Node.js stream
-const result = await parser.parseStream(fs.createReadStream('large.xml'));
-
-// Manual chunks
-parser.feed('<root>'); parser.feed('<n>1</n>'); parser.feed('</root>');
-const result = parser.end();
-```
-
-See [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) for the complete reference.
 
 ## License
 
-MIT — Author: Amit Gupta
+MIT — [Amit Gupta](https://solothought.com)

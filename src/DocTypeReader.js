@@ -212,7 +212,6 @@ export function readDocType(parser) {
 
         } else if (ch === '>') {
             if (!hasBody || bodyDone) {
-                parser.outputBuilder && parser.outputBuilder.addDocType && parser.outputBuilder.addDocType(entities);
                 return entities;
             }
             // '>' before '[' is part of the external identifier — skip it
