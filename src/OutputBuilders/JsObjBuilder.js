@@ -1,4 +1,4 @@
-import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
+import { buildOptions, commonValueParsers } from './ParserOptionsBuilder.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
 import { Expression } from 'path-expression-matcher';
 
@@ -7,7 +7,7 @@ const rootName = '^';
 export default class OutputBuilder {
   constructor(builderOptions) {
     this.options = buildOptions(builderOptions);
-    this.registeredValParsers = registerCommonValueParsers(this.options);
+    this.commonValParsers = commonValueParsers();
 
     // Pre-compile any string expressions in alwaysArray to Expression objects once
     if (this.options.alwaysArray) {
@@ -18,11 +18,12 @@ export default class OutputBuilder {
   }
 
   registerValueParser(name, parserInstance) {
-    this.registeredValParsers[name] = parserInstance;
+    //This would replace the default value parser with the user provided value parser
+    this.commonValParsers[name] = parserInstance;
   }
 
   getInstance(parserOptions, readonlyMatcher) {
-    const valParsers = { ...this.registeredValParsers };
+    const valParsers = { ...this.commonValParsers };
     return new JsObjBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }

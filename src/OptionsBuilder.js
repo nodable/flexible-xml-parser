@@ -135,7 +135,7 @@ export const defaultOptions = {
   },
 
   // --- output ---
-  OutputBuilder: null,
+  OutputBuilder: null, //TODO: accept lower case
 };
 
 // All names that should never appear as property keys

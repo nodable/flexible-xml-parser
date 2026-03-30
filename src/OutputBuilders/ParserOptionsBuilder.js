@@ -82,7 +82,7 @@ function copyProperties(target, source) {
   }
 }
 
-export function registerCommonValueParsers() {
+export function commonValueParsers() {
   return {
     "replaceEntities": new EntitiesValueParser({ default: true }),
     "trim": new trimParser(),

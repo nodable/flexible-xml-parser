@@ -1,7 +1,7 @@
 
 //OrderedOutputBuilder
 
-import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
+import { buildOptions, commonValueParsers } from './ParserOptionsBuilder.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
 
 const rootName = '!js_arr';
@@ -9,15 +9,15 @@ const rootName = '!js_arr';
 export default class OutputBuilder {
   constructor(options) {
     this.options = buildOptions(options);
-    this.registeredValParsers = registerCommonValueParsers(this.options);
+    this.commonValParsers = commonValueParsers();
   }
 
   registerValueParser(name, parserInstance) {
-    this.registeredValParsers[name] = parserInstance;
+    this.commonValParsers[name] = parserInstance;
   }
 
   getInstance(parserOptions, readonlyMatcher) {
-    const valParsers = { ...this.registeredValParsers };
+    const valParsers = { ...this.commonValParsers };
     return new JsArrBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }

@@ -13,8 +13,11 @@
 
 import XMLParser from "../src/XMLParser.js";
 import JsObjOutputBuilder, { JsObjBuilder } from "../src/OutputBuilders/JsObjBuilder.js";
-import { runAcrossAllInputSources, runAcrossAllInputSourcesWithFactory } from "./helpers/testRunner.js";
-
+import {
+  runAcrossAllInputSources,
+  runAcrossAllInputSourcesWithFactory, frunAcrossAllInputSourcesWithFactory
+} from "./helpers/testRunner.js";
+import numberParser from "../src/OutputBuilders/ValueParsers/number.js";
 
 // ─── Helper ────────────────────────────────────────────────────────────────
 // Build a custom OutputBuilder factory from a JsObjBuilder subclass.
@@ -23,8 +26,11 @@ function makeFactory(BuilderSubclass) {
   return {
     getInstance(parserOptions) {
       const base = new JsObjOutputBuilder();
-      const parsers = { ...base.registeredValParsers };
-      return new BuilderSubclass(parserOptions, base.options, parsers);
+      const valParsers = {
+        ...base.registeredValParsers,
+        "number": new numberParser()
+      };
+      return new BuilderSubclass(parserOptions, base.options, valParsers);
     },
     registerValueParser(name, parser) {
       // no-op for test factories

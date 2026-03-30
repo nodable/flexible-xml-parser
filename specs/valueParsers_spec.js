@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import { EntitiesValueParser, JsObjBuilder } from "../src/fxp.js";
+import EntitiesValueParser from "../src/EntityParser/EntitiesParser.js";
 import JsObjOutputBuilder from "../src/OutputBuilders/JsObjBuilder.js";
 import numParser from "../src/OutputBuilders/ValueParsers/number.js";
 import { skip } from "node:test";
@@ -81,7 +81,7 @@ describe("Value Parsers", function () {
     const evp = new EntitiesValueParser({
       docType: true
     });
-    const builder = new JsObjBuilder();
+    const builder = new JsObjOutputBuilder();
     builder.registerValueParser("replaceEntities", evp);
 
     const parser = new XMLParser({
@@ -102,33 +102,31 @@ describe("Value Parsers", function () {
     expect(result.root.tag).toBe("&lt;raw&gt;");
   });
 
-  xit("should expand HTML entities when entityParseOptions.html is true", function () {
-    const evp = new EntitiesValueParser({
-      html: true
-    });
-    const builder = new JsObjBuilder({
+  it("should expand HTML entities when entityParseOptions.html is true", function () {
+    const evp = new EntitiesValueParser({ html: true });
+    const builder = new JsObjOutputBuilder({
       // attributes: { valueParsers: ['replaceEntities'] }
-      attributes: { valueParsers: [evp, "number"] },
-      //tags: { valueParsers: [evp, "number"] }
+      tags: { valueParsers: [evp, "number"] }
+      // tags: { valueParsers: ["replaceEntities", "number"] }
     });
 
-    // builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("replaceEntities", evp);
 
     const parser = new XMLParser({
       skip: { attributes: false },
-      outputBuilder: builder,
+      OutputBuilder: builder,
     });
     const result = parser.parse(`<root><c>&copy;</c><p>&pound;</p></root>`);
     expect(result.root.c).toBe("©");
     expect(result.root.p).toBe("£");
   });
 
-  xit("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
+  it("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
 
     const evp = new EntitiesValueParser({
       html: true
     });
-    const builder = new JsObjBuilder({
+    const builder = new JsObjOutputBuilder({
       // attributes: { valueParsers: ['replaceEntities'] }
       attributes: { valueParsers: [evp] }
     });
@@ -137,7 +135,7 @@ describe("Value Parsers", function () {
 
     const parser = new XMLParser({
       skip: { attributes: false },
-      outputBuilder: builder,
+      OutputBuilder: builder,
     });
     const result = parser.parse(`<root label="&copy; 2024"/>`);
     expect(result.root["@_label"]).toBe("© 2024");

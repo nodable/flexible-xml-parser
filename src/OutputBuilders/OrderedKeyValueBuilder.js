@@ -1,4 +1,4 @@
-import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
+import { buildOptions, commonValueParsers } from './ParserOptionsBuilder.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
 
 const rootName = '!ordered_kv';
@@ -6,15 +6,15 @@ const rootName = '!ordered_kv';
 export default class OutputBuilder {
   constructor(options) {
     this.options = buildOptions(options);
-    this.registeredValParsers = registerCommonValueParsers(this.options);
+    this.commonValParsers = commonValueParsers();
   }
 
   registerValueParser(name, parserInstance) {
-    this.registeredValParsers[name] = parserInstance;
+    this.commonValParsers[name] = parserInstance;
   }
 
   getInstance(parserOptions, readonlyMatcher) {
-    const valParsers = { ...this.registeredValParsers };
+    const valParsers = { ...this.commonValParsers };
     return new OrderedKeyValBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
