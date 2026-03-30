@@ -121,6 +121,18 @@ export function runAcrossAllInputSourcesWithFactory(testName, xmlString, testFn,
     });
   });
 }
+export function frunAcrossAllInputSourcesWithFactory(testName, xmlString, testFn, parserFactory) {
+  const inputTypes = ['string', 'buffer', 'feedable'];
+
+  inputTypes.forEach(inputType => {
+    fit(`${testName} [${inputType}]`, function () {
+      const parser = parserFactory();
+      const inputSource = createInputSource(xmlString, inputType);
+      const result = inputSource.parse(parser);
+      testFn(result, inputSource.type, parser);
+    });
+  });
+}
 
 /**
  * Describe block that runs all tests within it across all input sources

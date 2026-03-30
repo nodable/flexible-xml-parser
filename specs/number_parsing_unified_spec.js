@@ -1,9 +1,17 @@
 import XMLParser from "../src/XMLParser.js";
+import { numberParser, JsObjBuilder } from "../src/fxp.js";
 import { runAcrossAllInputSources, createInputSource, describeAcrossAllInputSources } from "./helpers/testRunner.js";
+
+// Helper: build a parser with a custom numberParser configuration.
+const makeParser = (numOpts = {}, parserOpts = {}) => {
+  const builder = new JsObjBuilder();
+  builder.registerValueParser("number", new numberParser(numOpts));
+  return new XMLParser({ ...parserOpts, OutputBuilder: builder });
+};
 
 describe("Number Parsing - Unified Tests Across All Input Sources", function () {
 
-  // Basic integer parsing
+  // Basic integer parsing — default number parser handles these
   runAcrossAllInputSources(
     "should parse positive integers",
     "<root><num>123</num></root>",
@@ -39,104 +47,82 @@ describe("Number Parsing - Unified Tests Across All Input Sources", function () 
   );
 
   // Hexadecimal numbers
-  runAcrossAllInputSources(
-    "should parse hexadecimal numbers when enabled",
-    "<root><num>0xFF</num></root>",
-    (result) => {
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should parse hexadecimal numbers when enabled [${inputType}]`, function () {
+      const parser = makeParser({ hex: true });
+      const result = createInputSource("<root><num>0xFF</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(255);
-    },
-    { numberParseOptions: { hex: true } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should not parse hexadecimal when disabled",
-    "<root><num>0xFF</num></root>",
-    (result) => {
+    it(`should not parse hexadecimal when disabled [${inputType}]`, function () {
+      const parser = makeParser({ hex: false });
+      const result = createInputSource("<root><num>0xFF</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe("0xFF");
       expect(typeof result.root.num).toBe('string');
-    },
-    { numberParseOptions: { hex: false } }
-  );
+    });
+  });
 
   // Leading zeros
-  runAcrossAllInputSources(
-    "should parse numbers with leading zeros when enabled",
-    "<root><num>007</num></root>",
-    (result) => {
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should parse numbers with leading zeros when enabled [${inputType}]`, function () {
+      const parser = makeParser({ leadingZeros: true });
+      const result = createInputSource("<root><num>007</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(7);
-    },
-    { numberParseOptions: { leadingZeros: true } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should reject leading zeros when disabled",
-    "<root><num>007</num></root>",
-    (result) => {
+    it(`should reject leading zeros when disabled [${inputType}]`, function () {
+      const parser = makeParser({ leadingZeros: false });
+      const result = createInputSource("<root><num>007</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe("007");
       expect(typeof result.root.num).toBe('string');
-    },
-    { numberParseOptions: { leadingZeros: false } }
-  );
+    });
+  });
 
   // E-notation
-  runAcrossAllInputSources(
-    "should parse e-notation when enabled",
-    "<root><num>1.5e3</num></root>",
-    (result) => {
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should parse e-notation when enabled [${inputType}]`, function () {
+      const parser = makeParser({ eNotation: true });
+      const result = createInputSource("<root><num>1.5e3</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(1500);
-    },
-    { numberParseOptions: { eNotation: true } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should not parse e-notation when disabled",
-    "<root><num>1.5e3</num></root>",
-    (result) => {
+    it(`should not parse e-notation when disabled [${inputType}]`, function () {
+      const parser = makeParser({ eNotation: false });
+      const result = createInputSource("<root><num>1.5e3</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe("1.5e3");
-    },
-    { numberParseOptions: { eNotation: false } }
-  );
+    });
+  });
 
-  // Infinity handling (NEW in strnum)
-  runAcrossAllInputSources(
-    "should handle infinity with 'original' option (default)",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+  // Infinity handling
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should handle infinity with 'original' option (default) [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "original" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe("1e1000");
       expect(typeof result.root.num).toBe('string');
-    },
-    { numberParseOptions: { infinity: "original" } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should handle infinity with 'infinity' option",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+    it(`should handle infinity with 'infinity' option [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "infinity" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(Infinity);
-    },
-    { numberParseOptions: { infinity: "infinity" } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should handle infinity with 'string' option",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+    it(`should handle infinity with 'string' option [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "string" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe("Infinity");
       expect(typeof result.root.num).toBe('string');
-    },
-    { numberParseOptions: { infinity: "string" } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should handle infinity with 'null' option",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+    it(`should handle infinity with 'null' option [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "null" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(null);
-    },
-    { numberParseOptions: { infinity: "null" } }
-  );
+    });
+  });
 
-  // Edge cases
+  // Edge cases — default parser handles these
   runAcrossAllInputSources(
     "should parse zero",
     "<root><num>0</num></root>",
@@ -164,16 +150,18 @@ describe("Number Parsing - Unified Tests Across All Input Sources", function () 
   );
 
   // Multiple numbers in same document
-  runAcrossAllInputSources(
-    "should parse multiple numbers correctly",
-    "<root><a>123</a><b>456.789</b><c>0xFF</c></root>",
-    (result) => {
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should parse multiple numbers correctly [${inputType}]`, function () {
+      const parser = makeParser({ hex: true });
+      const result = createInputSource(
+        "<root><a>123</a><b>456.789</b><c>0xFF</c></root>",
+        inputType
+      ).parse(parser);
       expect(result.root.a).toBe(123);
       expect(result.root.b).toBe(456.789);
       expect(result.root.c).toBe(255);
-    },
-    { numberParseOptions: { hex: true } }
-  );
+    });
+  });
 
 });
 
@@ -191,7 +179,13 @@ describeAcrossAllInputSources("Advanced Number Parsing Scenarios", function (par
       </data>
     `;
 
-    const result = parse(xml, { numberParseOptions: { hex: true } });
+    // describeAcrossAllInputSources uses XMLParser directly via parse(), so we
+    // can't inject a custom builder. Create a parser manually for this test.
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("number", new numberParser({ hex: true }));
+    const parser = new XMLParser({ OutputBuilder: builder });
+    const result = createInputSource(xml, inputType).parse(parser);
+
     expect(result.data.int).toBe(42);
     expect(result.data.float).toBeCloseTo(3.14159, 5);
     expect(result.data.hex).toBe(3735928559);
@@ -202,13 +196,11 @@ describeAcrossAllInputSources("Advanced Number Parsing Scenarios", function (par
   it("should preserve strings that look like numbers when tags.valueParsers is empty", function () {
     const xml = "<root><num>123</num></root>";
     const result = parse(xml, { tags: { valueParsers: [] } });
-
     expect(result.root.num).toBe("123");
     expect(typeof result.root.num).toBe('string');
   });
 
   it(`should work consistently for ${inputType} input type`, function () {
-    // Input-type-specific test if needed
     expect(inputType).toMatch(/^(string|buffer|feedable)$/);
   });
 
@@ -216,14 +208,14 @@ describeAcrossAllInputSources("Advanced Number Parsing Scenarios", function (par
 
 describe("Security - Infinity Handling", function () {
 
+  // Default parser uses 'original' — Infinity stays as string
   runAcrossAllInputSources(
     "should prevent DoS from infinite values (default: original)",
     "<root><num>1e1000</num></root>",
     (result) => {
-      // Default should NOT convert to Infinity
       expect(result.root.num).toBe("1e1000");
       expect(typeof result.root.num).toBe('string');
-      expect(Number.isFinite(result.root.num)).toBe(false); // It's a string
+      expect(Number.isFinite(result.root.num)).toBe(false);
     }
   );
 
@@ -236,22 +228,18 @@ describe("Security - Infinity Handling", function () {
     }
   );
 
-  runAcrossAllInputSources(
-    "should allow explicit infinity conversion when opted in",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should allow explicit infinity conversion when opted in [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "infinity" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(Infinity);
-    },
-    { numberParseOptions: { infinity: "infinity" } }
-  );
+    });
 
-  runAcrossAllInputSources(
-    "should convert infinity to null when configured",
-    "<root><num>1e1000</num></root>",
-    (result) => {
+    it(`should convert infinity to null when configured [${inputType}]`, function () {
+      const parser = makeParser({ infinity: "null" });
+      const result = createInputSource("<root><num>1e1000</num></root>", inputType).parse(parser);
       expect(result.root.num).toBe(null);
-    },
-    { numberParseOptions: { infinity: "null" } }
-  );
+    });
+  });
 
 });

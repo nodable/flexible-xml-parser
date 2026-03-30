@@ -59,12 +59,12 @@ value unchanged.
 
 Pipelines are configured per section — one for tag text content and one for
 attribute values — through the `tags.valueParsers` and `attributes.valueParsers`
-options.
+options on the **output builder**, not on `XMLParser`.
 
 ```js
-import XMLParser from 'flex-xml-parser';
+import { XMLParser, JsObjBuilder } from 'flex-xml-parser';
 
-const parser = new XMLParser({
+const builder = new JsObjBuilder({
   tags: {
     valueParsers: ['replaceEntities', 'boolean', 'number'],  // default
   },
@@ -72,6 +72,7 @@ const parser = new XMLParser({
     valueParsers: ['replaceEntities', 'number', 'boolean'],  // default
   },
 });
+const parser = new XMLParser({ OutputBuilder: builder });
 ```
 
 Each entry can be:
@@ -84,10 +85,11 @@ Each entry can be:
 To **disable all value transformation** pass an empty array:
 
 ```js
-const parser = new XMLParser({
+const builder = new JsObjBuilder({
   tags: { valueParsers: [] },
   attributes: { valueParsers: [] },
 });
+const parser = new XMLParser({ OutputBuilder: builder });
 // All values come out as raw strings
 ```
 
@@ -99,35 +101,45 @@ const parser = new XMLParser({
 
 Expands XML entity references (`&lt;`, `&gt;`, `&amp;`, `&apos;`, `&quot;`),
 optional HTML named entities (`&nbsp;`, `&copy;`, etc.), DOCTYPE-declared
-entities, and any entities registered via `parser.addEntity()`.
+entities, and any entities registered via `EntitiesValueParser.addEntity()`.
 
-Which sources are active is controlled entirely by `entityParseOptions`:
+Which sources are active is controlled by the `EntitiesValueParser` instance
+registered under the `'replaceEntities'` key on the output builder:
 
 ```js
+import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+const evp = new EntitiesValueParser({
+  default: true,   // built-in XML entities (default: true)
+  html: false,     // HTML named entities  (default: false)
+  external: true,  // evp.addEntity()      (default: true)
+});
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+
 const parser = new XMLParser({
-  entityParseOptions: {
-    default: true,   // built-in XML entities (default: true)
-    html: false,     // HTML named entities  (default: false)
-    external: true,  // parser.addEntity()   (default: true)
-    docType: false,  // DOCTYPE entities     (default: false)
-  },
-  tags: { valueParsers: ['replaceEntities', 'boolean', 'number'] },
+  doctypeOptions: { enabled: false }, // DOCTYPE entities (default: false)
+  OutputBuilder: builder,
 });
 ```
+
+DOCTYPE entity collection is controlled separately by `doctypeOptions.enabled` on
+`XMLParser`, since it happens at read time before value parsing runs.
 
 Remove `'replaceEntities'` from the chain to leave all entity references
 unexpanded without touching any other option:
 
 ```js
-const parser = new XMLParser({
+const builder = new JsObjBuilder({
   tags: { valueParsers: ['boolean', 'number'] },
 });
+const parser = new XMLParser({ OutputBuilder: builder });
 // &lt; stays as the literal string "&lt;"
 ```
 
-See [DOCUMENTATION.md](./DOCUMENTATION.md) for the full `entityParseOptions`
-reference and security limits (`maxEntityCount`, `maxEntitySize`,
-`maxTotalExpansions`, `maxExpandedLength`).
+See [DOCUMENTATION.md](./DOCUMENTATION.md) for the full `EntitiesValueParser`
+option reference and security limits (`maxTotalExpansions`, `maxExpandedLength`),
+and `doctypeOptions` for read-time limits (`maxEntityCount`, `maxEntitySize`).
 
 ---
 
@@ -156,7 +168,7 @@ default lists. To customise the recognised values, instantiate it directly
 
 Converts numeric strings to JavaScript numbers using the
 [`strnum`](https://www.npmjs.com/package/strnum) library. The conversion is
-controlled by `numberParseOptions`:
+controlled by the options passed when constructing the `numberParser` instance:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -165,15 +177,21 @@ controlled by `numberParseOptions`:
 | `eNotation` | boolean | `true` | Parse `1.5e3` as `1500` |
 | `infinity` | string | `"original"` | What to do when a value overflows to Infinity: `"original"` (keep string), `"infinity"` (JS `Infinity`), `"string"` (`"Infinity"`), `"null"` (`null`) |
 
+To customise number parsing, instantiate `numberParser` directly and register it
+on the output builder:
+
 ```js
-const parser = new XMLParser({
-  numberParseOptions: {
-    hex: true,
-    leadingZeros: false,  // "007" stays as "007"
-    eNotation: true,
-    infinity: 'original', // very large numbers stay as strings
-  },
-});
+import { numberParser, JsObjBuilder } from 'flex-xml-parser';
+
+const builder = new JsObjBuilder();
+builder.registerValueParser('number', new numberParser({
+  hex:          true,
+  leadingZeros: false,  // "007" stays as "007"
+  eNotation:    true,
+  infinity:     'original', // very large numbers stay as strings
+}));
+
+const parser = new XMLParser({ OutputBuilder: builder });
 ```
 
 Non-numeric strings are passed through unchanged.
@@ -500,9 +518,9 @@ const parser = new XMLParser({
 
 | Name | Registered as | Input → Output | Notes |
 |---|---|---|---|
-| Entity replacement | `'replaceEntities'` | `"&lt;"` → `"<"` | Controlled by `entityParseOptions` |
+| Entity replacement | `'replaceEntities'` | `"&lt;"` → `"<"` | Configured via `EntitiesValueParser` options |
 | Boolean conversion | `'boolean'` | `"true"` → `true` | Customisable true/false lists |
-| Number conversion | `'number'` | `"42"` → `42` | Controlled by `numberParseOptions` |
+| Number conversion | `'number'` | `"42"` → `42` | Configure by registering a custom `numberParser` instance |
 | Whitespace trim | `'trim'` | `"  hi  "` → `"hi"` | Not in default chain |
 | Currency parsing | `'currency'` | `"$1,234.56"` → `1234.56` | Not in default chain |
 | Custom (by name) | your string key | depends on parser | Register via `builder.registerValueParser()` |

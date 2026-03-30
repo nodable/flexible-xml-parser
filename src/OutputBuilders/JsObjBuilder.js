@@ -1,5 +1,4 @@
 import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
-import numParser from '../ValueParsers/number.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
 import { Expression } from 'path-expression-matcher';
 
@@ -23,10 +22,7 @@ export default class OutputBuilder {
   }
 
   getInstance(parserOptions, readonlyMatcher) {
-    let valParsers = { ...this.registeredValParsers };
-    if (parserOptions && parserOptions.numberParseOptions) {
-      valParsers['number'] = new numParser(parserOptions.numberParseOptions);
-    }
+    const valParsers = { ...this.registeredValParsers };
     return new JsObjBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }

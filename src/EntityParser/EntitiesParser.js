@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Built-in entity tables
 // ---------------------------------------------------------------------------
-import { ParseError, ErrorCode } from './ParseError.js';
+import { ParseError, ErrorCode } from '../ParseError.js';
 
 /** Standard XML entities — always replaced last so they cannot be overridden by DOCTYPE. */
 const defaultXmlEntities = {
@@ -35,7 +35,7 @@ const defaultHtmlEntities = {
 /**
  * Holds all entity tables and performs entity replacement.
  *
- * Controlled entirely by `entityParseOptions`:
+ * Controlled entirely by the options passed to the constructor:
  *
  *   default  — true  → use built-in XML entities (lt/gt/apos/quot/amp)
  *              false/null → disable XML entity replacement
@@ -45,19 +45,15 @@ const defaultHtmlEntities = {
  *              false/null → disable HTML entity replacement (default)
  *              object → use this custom map instead of the built-in set
  *
- *   external — true (default) → apply entities added via addEntity()
+ *   external — true (default) → apply entities added via addExternalEntity()
  *              false/null → entities are stored but NOT applied during replacement
  *
- *   docType  — false (default) → DOCTYPE is always read but entities are discarded
- *              true → store DOCTYPE entities and apply them during replacement
- *
  * Security limits enforced during replaceEntitiesValue():
- *   maxTotalExpansions  — max total entity references expanded per document
- *   maxExpandedLength   — max total characters added by expansion per document
+ *   maxTotalExpansions  — max total entity references expanded per document (0 = unlimited)
+ *   maxExpandedLength   — max total characters added by expansion per document (0 = unlimited)
  *
- * Security limits enforced in DocTypeReader at declaration time:
- *   maxEntityCount  — max entities declared in a single DOCTYPE
- *   maxEntitySize   — max bytes per entity definition value
+ * Read-time limits (maxEntityCount, maxEntitySize) are enforced by DocTypeReader
+ * using doctypeOptions on the XML parser — they are not part of this class.
  */
 export default class EntitiesParser {
   constructor(options = {}) {
@@ -65,36 +61,23 @@ export default class EntitiesParser {
     this.xmlEntities = resolveEntityTable(options.default, defaultXmlEntities);
     this.htmlEntities = resolveEntityTable(options.html, defaultHtmlEntities);
     this.applyExternal = options.external !== false && options.external !== null;
-    this.applyDocType = options.docType === true;
 
-    // Security limits (0 = unlimited)
+    // Replacement-time security limits (0 = unlimited)
     this.maxTotalExpansions = options.maxTotalExpansions || 0;
     this.maxExpandedLength = options.maxExpandedLength || 0;
 
-    // Per-document counters — reset before each parse
+    // Per-document counters — reset automatically in addDocTypeEntities()
     this.totalExpansions = 0;
     this.expandedLength = 0;
 
     // Entity stores — null-prototype maps so entity names cannot shadow Object.prototype
     this.docTypeEntities = Object.create(null);
     this.externalEntities = Object.create(null);
-
-    // Load construction-time external entities if provided
-    if (options.entities && typeof options.entities === 'object') {
-      this.addExternalEntities(options.entities);
-    }
   }
 
   // -------------------------------------------------------------------------
   // Entity registration
   // -------------------------------------------------------------------------
-
-  /** Reset per-document counters. Called by Xml2JsParser before each parse. */
-  resetCounters() {
-    this.totalExpansions = 0;
-    this.expandedLength = 0;
-    this.docTypeEntities = Object.create(null);
-  }
 
   addExternalEntities(map) {
     for (const key of Object.keys(map)) {
@@ -116,11 +99,21 @@ export default class EntitiesParser {
   }
 
   /**
-   * Store entities collected from DOCTYPE.
-   * Only called by Xml2JsParser when entityParseOptions.docType is true.
-   * DocTypeReader passes { regx, val } objects; plain strings are also accepted.
+   * Store entities collected from DOCTYPE and reset per-document counters.
+   *
+   * Called by the output builder's addDocTypeEntities() at the start of each
+   * parse. Resetting here is intentional — it ties the counter reset directly
+   * to the moment new document data arrives, without needing a separate
+   * resetCounters() call from the outside.
+   *
+   * Accepts { regx, val } objects (from DocTypeReader) or plain strings.
    */
   addDocTypeEntities(entities) {
+    // Reset per-document counters for the new parse
+    this.totalExpansions = 0;
+    this.expandedLength = 0;
+    this.docTypeEntities = Object.create(null);
+
     for (const ent of Object.keys(entities)) {
       const raw = entities[ent];
       if (typeof raw === 'object' && raw !== null && raw.val !== undefined) {
@@ -145,7 +138,7 @@ export default class EntitiesParser {
 
   /**
    * Replacement order:
-   *   1. DOCTYPE entities  (only if applyDocType is true)
+   *   1. DOCTYPE entities  (only if docTypeEntities is populated)
    *   2. External entities (only if applyExternal is true)
    *   3. Built-in XML entities (lt/gt/apos/quot) — unless disabled via default: false
    *   4. HTML named entities — if enabled via html: true or custom map
@@ -156,7 +149,7 @@ export default class EntitiesParser {
     if (val.indexOf('&') === -1) return val; // fast exit
 
     // 1. DOCTYPE entities (tracked for security limits)
-    if (this.applyDocType) {
+    if (Object.keys(this.docTypeEntities).length > 0) {
       val = this._applyTable(val, this.docTypeEntities, true);
     }
 
@@ -168,7 +161,6 @@ export default class EntitiesParser {
     // 3. Built-in XML entities
     if (this.xmlEntities) {
       val = this._applyTable(val, this.xmlEntities, false);
-
     }
 
     // 4. HTML entities
@@ -184,9 +176,9 @@ export default class EntitiesParser {
 
   /**
    * Apply one entity table to val.
-   * @param {string} val
-   * @param {object} table  — map of { name: { regex, val } }
-   * @param {boolean} trackExpansions — enforce security counters for this table
+   * @param {string}  val
+   * @param {object}  table            — map of { name: { regex, val } }
+   * @param {boolean} trackExpansions  — enforce security counters for this table
    */
   _applyTable(val, table, trackExpansions) {
     for (const name of Object.keys(table)) {
@@ -238,11 +230,11 @@ export default class EntitiesParser {
  *   false/null      → disabled (returns null)
  *   object          → use as the table directly
  */
-function resolveEntityTable(option, builtIn) {
+function resolveEntityTable(option, builtIn, defaultEnabled) {
   if (option === false || option === null) return null;
-  if (option === undefined || option === true) return builtIn;
-  // return Object.create(option);
-  return option
+  if (option === true) return builtIn;
+  if (option === undefined) return defaultEnabled ? builtIn : null; // respects per-option default
+  return option;
 }
 
 // Entity names must not contain regex special characters
@@ -251,7 +243,9 @@ const specialChar = "!?\\\\/[]$%{}^&*()<>|+";
 function validateEntityName(name) {
   for (let i = 0; i < specialChar.length; i++) {
     const ch = specialChar[i];
-    if (name.indexOf(ch) !== -1) throw new ParseError(`Invalid character '${ch}' in entity name`, ErrorCode.ENTITY_INVALID_KEY);
+    if (name.indexOf(ch) !== -1) {
+      throw new ParseError(`Invalid character '${ch}' in entity name`, ErrorCode.ENTITY_INVALID_KEY);
+    }
   }
   return name;
 }

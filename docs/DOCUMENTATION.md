@@ -62,12 +62,13 @@ const result = parser.parse('<item id="1">hello</item>');
 
 | Component | Role |
 |-----------|------|
-| `XMLParser` | Public entry point — manages options, entities, exposes all APIs |
+| `XMLParser` | Public entry point — manages options, exposes all APIs |
 | `Xml2JsParser` | Core parsing engine — tokenises XML, drives the OutputBuilder |
-| `OutputBuilder` | Assembles the JS result from parse events |
+| `OutputBuilder` | Assembles the JS result from parse events; owns the value parser chain |
 | `ValueParsers` | Chainable transformers: string → typed value |
-| `EntitiesParser` | Holds entity tables (built-in, DOCTYPE, external); used by `replaceEntities` ValueParser |
-| `DocTypeReader` | Reads DOCTYPE declarations, respects `entityParseOptions` limits |
+| `EntitiesParser` | Holds entity tables (built-in, DOCTYPE, external); used by `EntitiesValueParser` |
+| `EntitiesValueParser` | Value parser that expands entity references; owns external entity registration |
+| `DocTypeReader` | Reads DOCTYPE declarations, respects `doctypeOptions` read-time limits |
 
 ### Data Flow
 
@@ -75,7 +76,7 @@ const result = parser.parse('<item id="1">hello</item>');
 XML input
   → Xml2JsParser  (tokenise: tags, text, CDATA, comments, PIs, DOCTYPE)
       → DocTypeReader  (always reads DOCTYPE to advance cursor;
-                        stores entities only when entityParseOptions.docType: true)
+                        forwards entities to OutputBuilder only when doctypeOptions.enabled: true)
           → OutputBuilder  (assemble JS structure)
               → ValueParsers  ('replaceEntities' expands refs, 'boolean'/'number' coerce types)
                   → result
@@ -86,21 +87,21 @@ XML input
 Entity replacement is controlled by two completely independent settings:
 
 ```
-DOCTYPE block → [entityParseOptions.docType gate] → entity table → ['replaceEntities' gate] → replacement in values
+DOCTYPE block → [doctypeOptions.enabled gate] → outputBuilder.addDocTypeEntities() → ['replaceEntities' gate] → replacement in values
 ```
 
-| `entityParseOptions.docType` | `'replaceEntities'` in valueParsers | Result |
+| `doctypeOptions.enabled` | `'replaceEntities'` in valueParsers | Result |
 |---|---|---|
 | `false` (default) | yes (default) | DOCTYPE entities discarded; built-in XML entities still replaced |
 | `true` | yes | DOCTYPE entities collected AND replaced |
 | `true` | no | DOCTYPE entities collected but NOT replaced |
 | `false` | no | Nothing replaced at all |
 
-The same two-gate model applies to other entity sources:
+The same two-gate model applies to other entity sources, all configured on `EntitiesValueParser`:
 
-- **`entityParseOptions.external`** — gates whether `addEntity()` registrations are applied
-- **`entityParseOptions.html`** — gates HTML named entity replacement
-- **`entityParseOptions.default`** — gates built-in XML entity replacement (lt/gt/apos/quot/amp)
+- **`external`** — gates whether entities registered via `EntitiesValueParser.addEntity()` are applied
+- **`html`** — gates HTML named entity replacement
+- **`default`** — gates built-in XML entity replacement (lt/gt/apos/quot/amp)
 
 ---
 
@@ -139,20 +140,6 @@ Incremental parsing — feed chunks, call `end()` to get the result.
 parser.feed('<root>');
 parser.feed('<tag>hello</tag>');
 const result = parser.end();  // { root: { tag: 'hello' } }
-```
-
-### `parser.addEntity(key, value)`
-
-Register a custom external entity (without `&` and `;`).
-
-Entities are always stored regardless of `entityParseOptions.external`. The `external`
-flag only controls whether they are applied during replacement — useful for quick
-on/off toggling without removing registrations.
-
-```javascript
-parser.addEntity('copy', '©');
-parser.addEntity('trade', '™');
-parser.parse('<root>&copy; &trade;</root>');  // { root: '© ™' }
 ```
 
 ---
@@ -220,13 +207,15 @@ const parser = new XMLParser({
 
 ```javascript
 attributes: {
-  booleanType:  false,                                    // Allow valueless attributes (→ true)
-  groupBy:      '',                                       // Group under this key; '' = inline
-  prefix:       '@_',                                     // Prepend to attribute names
-  suffix:       '',                                       // Append to attribute names
-  valueParsers: ['replaceEntities', 'number', 'boolean'],
+  booleanType:  false,  // Allow valueless attributes (→ true)
+  groupBy:      '',     // Group under this key; '' = inline
+  prefix:       '@_',   // Prepend to attribute names
+  suffix:       '',     // Append to attribute names
 }
 ```
+
+The `valueParsers` chain for attributes is configured on the **output builder**, not
+on `XMLParser`. See [Value Parsers](#value-parsers) for details.
 
 ```javascript
 // No prefix, grouped under '$'
@@ -242,10 +231,13 @@ new XMLParser({
 
 ```javascript
 tags: {
-  unpaired:     [],                                      // Self-closing tags (br, img, hr…)
-  stopNodes:    [],                                      // Paths captured raw without parsing
-  valueParsers: ['replaceEntities', 'boolean', 'number'],
+  unpaired:  [],  // Self-closing tags (br, img, hr…)
+  stopNodes: [],  // Paths captured raw without parsing
 }
+```
+
+The `valueParsers` chain for tag text is configured on the **output builder**, not
+on `XMLParser`. See [Value Parsers](#value-parsers) for details.
 ```
 
 **`tags.stopNodes`** — tag paths whose inner content is captured as a raw string
@@ -287,13 +279,55 @@ matching) and worked examples.
 
 ---
 
-### `entityParseOptions` — entity sources and security limits
+### `doctypeOptions` — DOCTYPE reading and read-time security limits
 
-This is the single place to control all entity behaviour.
+Controls whether DOCTYPE entities are collected and enforces limits at **read time**
+(inside `DocTypeReader`). Replacement behaviour — which entity tables are active,
+expansion limits — is configured on `EntitiesValueParser` directly.
 
 ```javascript
-entityParseOptions: {
-  // ── Entity sources ──────────────────────────────────────────────────────
+doctypeOptions: {
+  enabled:        false,  // Collect DOCTYPE entities and forward to output builder
+                          //   false (default) → DOCTYPE is read (cursor advances) but
+                          //                     entities are discarded
+                          //   true            → entities collected and forwarded
+                          //   Note: 'replaceEntities' must also be in the output
+                          //         builder's valueParsers chain for replacement to happen
+
+  // ── Read-time limits (enforced by DocTypeReader at declaration time) ──────
+  maxEntityCount: 100,    // Max entities declared in a DOCTYPE
+  maxEntitySize:  10000,  // Max bytes per entity definition value
+}
+```
+
+#### Common recipes
+
+```javascript
+// Enable DOCTYPE entities
+new XMLParser({ doctypeOptions: { enabled: true } });
+
+// Tighten read-time limits for untrusted input
+new XMLParser({
+  doctypeOptions: {
+    enabled:        true,
+    maxEntityCount: 10,
+    maxEntitySize:  200,
+  },
+});
+```
+
+---
+
+### `EntitiesValueParser` — entity sources and replacement-time security limits
+
+Entity source flags and replacement-time limits are configured on `EntitiesValueParser`,
+which is registered on the output builder — not on `XMLParser`.
+
+```javascript
+import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+const evp = new EntitiesValueParser({
+  // ── Entity sources ───────────────────────────────────────────────────────
   default:  true,   // Built-in XML entities (lt, gt, apos, quot, amp)
                     //   true      → use built-in set (default)
                     //   false/null → disable entirely
@@ -304,69 +338,52 @@ entityParseOptions: {
                     //   true      → use built-in HTML set
                     //   object    → use this custom map instead
 
-  external: true,   // Entities registered via addEntity()
+  external: true,   // Entities registered via evp.addEntity()
                     //   true      → applied (default)
                     //   false/null → stored but not applied
 
-  docType:  false,  // Entities declared in DOCTYPE internal subset
-                    //   false/null → DOCTYPE is read (cursor advances) but
-                    //                entities are discarded (default)
-                    //   true      → entities collected and applied
-                    //   Note: 'replaceEntities' must also be in valueParsers
-
-  // ── Declaration-time limits (enforced by DocTypeReader) ─────────────────
-  maxEntityCount:     100,     // Max entities declared in a DOCTYPE
-  maxEntitySize:      10000,   // Max bytes per entity definition value
-
-  // ── Replacement-time limits (enforced during value parsing) ─────────────
+  // ── Replacement-time limits ──────────────────────────────────────────────
   maxTotalExpansions: 1000,    // Max total entity references expanded per document
   maxExpandedLength:  100000,  // Max total characters added by expansion per document
-}
+});
+
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+const parser = new XMLParser({ OutputBuilder: builder });
+```
+
+#### External entities
+
+Register custom entities directly on `EntitiesValueParser`:
+
+```javascript
+const evp = new EntitiesValueParser({ default: true });
+evp.addEntity('copy', '©');
+evp.addEntity('trade', '™');
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+const parser = new XMLParser({ OutputBuilder: builder });
+parser.parse('<root>&copy; &trade;</root>');  // { root: '© ™' }
 ```
 
 #### Common recipes
 
 ```javascript
-// Enable DOCTYPE entities
-new XMLParser({ entityParseOptions: { docType: true } });
-
 // Enable HTML entities
-new XMLParser({ entityParseOptions: { html: true } });
-
-// Enable both DOCTYPE and HTML entities
-new XMLParser({ entityParseOptions: { docType: true, html: true } });
+const evp = new EntitiesValueParser({ default: true, html: true });
 
 // Disable built-in XML entity replacement
-new XMLParser({ entityParseOptions: { default: false } });
+const evp = new EntitiesValueParser({ default: false });
 
 // Disable external entities (addEntity registrations still stored)
-new XMLParser({ entityParseOptions: { external: false } });
+const evp = new EntitiesValueParser({ default: true, external: false });
 
-// Tighten security limits for untrusted input
-new XMLParser({
-  entityParseOptions: {
-    docType: true,
-    maxEntityCount:     10,
-    maxEntitySize:      200,
-    maxTotalExpansions: 50,
-    maxExpandedLength:  5000,
-  },
+// Tighten replacement-time limits
+const evp = new EntitiesValueParser({
+  default: true,
+  maxTotalExpansions: 50,
+  maxExpandedLength:  5000,
 });
-```
-
----
-
-### `numberParseOptions`
-
-Passed to the built-in `'number'` ValueParser:
-
-```javascript
-numberParseOptions: {
-  hex:          true,       // Parse 0x... notation
-  leadingZeros: true,       // '007' → 7
-  eNotation:    true,       // 1e5, 2.5E-3
-  infinity:     'original', // 'original' | 'string' | 'number'
-}
 ```
 
 ---
@@ -386,47 +403,50 @@ Value parsers transform string values in sequence. Each receives the output of t
 
 ### Default chains
 
+The default chains are set by the output builder (`JsObjBuilder`, `JsArrBuilder`, etc.):
+
 ```
 tags.valueParsers:       ['replaceEntities', 'boolean', 'number']
 attributes.valueParsers: ['replaceEntities', 'number',  'boolean']
 ```
 
-No `'trim'` by default — the parser faithfully preserves whitespace. Add `'trim'` explicitly if needed.
+These can be overridden per output builder instance. No `'trim'` by default — the parser
+faithfully preserves whitespace. Add `'trim'` explicitly if needed.
 
 ### Built-in parsers
 
 | Name | What it does |
 |------|-------------|
-| `'replaceEntities'` | Expands entity references based on `entityParseOptions` (DOCTYPE, external, built-in XML, HTML) |
-| `'entities'` | Alias for `'replaceEntities'` — backwards compatible |
-| `'htmlEntities'` | Alias for `'replaceEntities'` — backwards compatible |
+| `'replaceEntities'` | Expands entity references. Configured via `EntitiesValueParser` options (DOCTYPE, external, built-in XML, HTML) |
 | `'boolean'` | `"true"` → `true`, `"false"` → `false` |
-| `'number'` | Parses numeric strings to JS numbers (configurable via `numberParseOptions`) |
+| `'number'` | Parses numeric strings to JS numbers (configurable by registering a custom `numberParser` instance) |
 | `'trim'` | Strips leading/trailing whitespace from strings |
 | `'currency'` | Parses currency values (strips symbols, handles locale formatting) |
 
 ### Controlling entity replacement
 
 ```javascript
-// Disable entity replacement entirely
-new XMLParser({
+// Disable entity replacement entirely — remove 'replaceEntities' from chain
+const builder = new JsObjBuilder({
   tags:       { valueParsers: ['boolean', 'number'] },
   attributes: { valueParsers: ['number', 'boolean'] },
 });
+const parser = new XMLParser({ OutputBuilder: builder });
 
 // Raw strings everywhere — no transformation at all
-new XMLParser({
+const builder2 = new JsObjBuilder({
   tags:       { valueParsers: [] },
   attributes: { valueParsers: [] },
 });
 
-// Enable HTML entities via entityParseOptions (preferred)
-new XMLParser({
-  entityParseOptions: { html: true },
-});
+// Enable HTML entities
+import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+const evp = new EntitiesValueParser({ default: true, html: true });
+const builder3 = new JsObjBuilder();
+builder3.registerValueParser('replaceEntities', evp);
 
 // Add trimming before entity expansion
-new XMLParser({
+const builder4 = new JsObjBuilder({
   tags: { valueParsers: ['trim', 'replaceEntities', 'boolean', 'number'] },
 });
 ```
@@ -615,9 +635,15 @@ parser.parse(`
 ### DOCTYPE entities
 
 ```javascript
-// Collect and replace entities declared in DOCTYPE internal subset
+import { XMLParser, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+const evp = new EntitiesValueParser({ default: true });
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+
 const parser = new XMLParser({
-  entityParseOptions: { docType: true },
+  doctypeOptions: { enabled: true },
+  OutputBuilder: builder,
 });
 const result = parser.parse(`
   <!DOCTYPE root [
@@ -635,11 +661,15 @@ const result = parser.parse(`
 ### External + DOCTYPE entities together
 
 ```javascript
-const parser = new XMLParser({
-  entityParseOptions: { docType: true },
-});
-parser.addEntity('copy', '©');
+const evp = new EntitiesValueParser({ default: true });
+evp.addEntity('copy', '©');
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
 
+const parser = new XMLParser({
+  doctypeOptions: { enabled: true },
+  OutputBuilder: builder,
+});
 const result = parser.parse(`
   <!DOCTYPE root [<!ENTITY brand "Acme">]>
   <root>&brand; &copy; 2024</root>
@@ -650,9 +680,11 @@ const result = parser.parse(`
 ### HTML entities in content
 
 ```javascript
-const parser = new XMLParser({
-  entityParseOptions: { html: true },
-});
+const evp = new EntitiesValueParser({ default: true, html: true });
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+
+const parser = new XMLParser({ OutputBuilder: builder });
 const result = parser.parse('<root><copy>&copy; 2024</copy></root>');
 // { root: { copy: '© 2024' } }
 ```
@@ -719,37 +751,47 @@ parser.parse('<content>text</content>');
 
 ### Entity expansion security
 
-**Disable all entity replacement** by removing `'replaceEntities'` from `valueParsers`:
+**Disable all entity replacement** by removing `'replaceEntities'` from the output builder's chain:
 
 ```javascript
-const parser = new XMLParser({
+const builder = new JsObjBuilder({
   tags:       { valueParsers: ['boolean', 'number'] },
   attributes: { valueParsers: ['number', 'boolean'] },
 });
+const parser = new XMLParser({ OutputBuilder: builder });
 ```
 
 **Disable only DOCTYPE entities** (keep built-in XML entity replacement):
 
 ```javascript
-// Default behaviour — entityParseOptions.docType is false by default
+// Default behaviour — doctypeOptions.enabled is false by default
 const parser = new XMLParser();
 ```
 
 **Tighten limits for untrusted input:**
 
 ```javascript
+import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+const evp = new EntitiesValueParser({
+  default:            true,
+  maxTotalExpansions: 50,
+  maxExpandedLength:  5000,
+});
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+
 const parser = new XMLParser({
-  entityParseOptions: {
-    docType:            true,
-    maxEntityCount:     10,
-    maxEntitySize:      200,
-    maxTotalExpansions: 50,
-    maxExpandedLength:  5000,
+  doctypeOptions: {
+    enabled:        true,
+    maxEntityCount: 10,
+    maxEntitySize:  200,
   },
+  OutputBuilder: builder,
 });
 ```
 
-**Billion Laughs protection** — entity values containing `&` are silently discarded by `DocTypeReader`, preventing recursive entity chains. Flat repetition attacks are caught by `maxTotalExpansions`.
+**Billion Laughs protection** — entity values containing `&` are silently discarded by `DocTypeReader`, preventing recursive entity chains. Flat repetition attacks are caught by `maxTotalExpansions` on `EntitiesValueParser`.
 
 ---
 
@@ -758,11 +800,8 @@ const parser = new XMLParser({
 ### Disable unused features
 
 ```javascript
-const parser = new XMLParser({
-  // attributes already skipped by default
-  tags: { valueParsers: [] },  // raw strings, no type coercion
-  entityParseOptions: { default: false, docType: false },
-});
+const builder = new JsObjBuilder({ tags: { valueParsers: [] } }); // raw strings, no type coercion
+const parser = new XMLParser({ OutputBuilder: builder });
 ```
 
 ### Streams for large files

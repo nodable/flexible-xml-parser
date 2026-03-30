@@ -7,7 +7,6 @@ import StreamSource from './InputSource/StreamSource.js';
 export default class XMLParser {
 
   constructor(options) {
-    this.externalEntities = {};
     this.options = buildOptions(options);
 
     // feed()/end() session state
@@ -241,31 +240,6 @@ export default class XMLParser {
     }
   }
 
-  // ─── Entity registration ──────────────────────────────────────────────────
-
-  /**
-   * Register a custom entity for replacement (without `&` and `;`).
-   * Requires 'replaceEntities' in the valueParsers chain.
-   *
-   * @param {string} key   e.g. 'copy' for &copy;
-   * @param {string} value replacement string; must not contain '&'
-   */
-  addEntity(key, value) {
-    if (typeof key !== 'string' || key.includes('&') || key.includes(';')) {
-      throw new ParseError(
-        "Entity key must not contain '&' or ';'. E.g. use 'copy' for '&copy;'",
-        ErrorCode.ENTITY_INVALID_KEY
-      );
-    }
-    if (typeof value !== 'string' || value.includes('&')) {
-      throw new ParseError(
-        "Entity value must be a string and must not contain '&'",
-        ErrorCode.ENTITY_INVALID_VALUE
-      );
-    }
-    this.externalEntities[key] = value;
-  }
-
   // ─── Error reporting ──────────────────────────────────────────────────────
 
   /**
@@ -283,9 +257,7 @@ export default class XMLParser {
 
   /** @private */
   _createParser() {
-    const p = new Xml2JsParser(this.options);
-    p.entityParser.addExternalEntities(this.externalEntities);
-    return p;
+    return new Xml2JsParser(this.options);
   }
 
   /** @private */

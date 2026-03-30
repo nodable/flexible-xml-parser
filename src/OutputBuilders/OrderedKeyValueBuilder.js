@@ -1,10 +1,7 @@
-
-//OrderedOutputBuilder
-
 import { buildOptions, registerCommonValueParsers } from './ParserOptionsBuilder.js';
 import BaseOutputBuilder, { ElementType } from './BaseOutputBuilder.js';
 
-const rootName = '!js_arr';
+const rootName = '!ordered_kv';
 
 export default class OutputBuilder {
   constructor(options) {
@@ -18,11 +15,11 @@ export default class OutputBuilder {
 
   getInstance(parserOptions, readonlyMatcher) {
     const valParsers = { ...this.registeredValParsers };
-    return new JsArrBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
+    return new OrderedKeyValBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
 
-class JsArrBuilder extends BaseOutputBuilder {
+class OrderedKeyValBuilder extends BaseOutputBuilder {
 
   constructor(parserOptions, builderOptions, registeredValParsers, readonlyMatcher) {
     super(readonlyMatcher);
@@ -80,28 +77,45 @@ class JsArrBuilder extends BaseOutputBuilder {
     }
 
     // Compact Leaf
-    if (this.options.compactLeaf && !node[":@"]) {
+    if (this.options.compactLeaf && !node.attributes) {
       const textKey = this.options.nameFor.text;
 
       const isSingleTextChild =
-        node.child.length === 1 &&
-        Object.prototype.hasOwnProperty.call(node.child[0], textKey) &&
-        Object.keys(node.child[0]).length === 1;
+        node.children.length === 1 &&
+        Object.prototype.hasOwnProperty.call(node.children[0], textKey) &&
+        Object.keys(node.children[0]).length === 1;
 
-      const isEmptyLeaf = node.child.length === 0;
+      const isEmptyLeaf = node.children.length === 0;
 
       if (isSingleTextChild || isEmptyLeaf) {
-        const value = isSingleTextChild ? node.child[0][textKey] : "";
-        this.currentNode.child.push({ [node.tagname]: value });
+        const value = isSingleTextChild ? node.children[0][textKey] : "";
+        this.currentNode.children.push({ [node.tagname]: value });
         return;
       }
     }
 
-    this.currentNode.child.push(node);
+    // Convert node to ordered key-value format
+    const keyValNode = this._convertToKeyVal(node);
+    this.currentNode.children.push(keyValNode);
+  }
+
+  _convertToKeyVal(node) {
+    const result = {};
+
+    // If node has attributes, include them with ":@" prefix
+    if (node.attributes && Object.keys(node.attributes).length > 0) {
+      result[node.tagname] = node.children;
+      // You might want to handle attributes differently based on your needs
+      // For now, they're not included in the output to match your example
+    } else {
+      result[node.tagname] = node.children;
+    }
+
+    return result;
   }
 
   _addChild(key, val) {
-    this.currentNode.child.push({ [key]: val });
+    this.currentNode.children.push({ [key]: val });
   }
 
   addValue(text) {
@@ -111,22 +125,23 @@ class JsArrBuilder extends BaseOutputBuilder {
       elementValue: text,
       elementType: ElementType.TAG,
       matcher: this.matcher,
-      isLeafNode: this.currentNode?.child?.length === 0,
+      isLeafNode: this.currentNode?.children?.length === 0,
     };
-    this.currentNode.child.push({
+    this.currentNode.children.push({
       [this.options.nameFor.text]: this.parseValue(text, this.options.tags.valueParsers, context)
     });
   }
 
   addPi(name) {
     const node = new Node(name, this.attributes);
-    this.currentNode.child.push(node);
+    const keyValNode = this._convertToKeyVal(node);
+    this.currentNode.children.push(keyValNode);
     this.attributes = {};
   }
 
   getOutput() {
-    const children = this.root.child;
-    if (children.length === 1) return children[0];
+    const children = this.root.children;
+    if (children.length === 1) return children;
     return children;
   }
 }
@@ -134,10 +149,10 @@ class JsArrBuilder extends BaseOutputBuilder {
 class Node {
   constructor(tagname, attributes) {
     this.tagname = tagname;
-    this.child = [];
+    this.children = [];
     if (attributes && Object.keys(attributes).length > 0)
-      this[":@"] = attributes;
+      this.attributes = attributes;
   }
 }
 
-export { JsArrBuilder };
+export { OrderedKeyValBuilder };

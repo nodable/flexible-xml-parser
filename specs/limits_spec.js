@@ -333,15 +333,6 @@ describe("ParseError — general error contract", function () {
     expect(typeof err.index).toBe("number");
   });
 
-  it("addEntity with bad key throws ParseError", function () {
-    const parser = new XMLParser();
-    expectParseError(() => parser.addEntity("&bad", "val"), ErrorCode.ENTITY_INVALID_KEY);
-  });
-
-  it("addEntity with bad value throws ParseError", function () {
-    const parser = new XMLParser();
-    expectParseError(() => parser.addEntity("ok", "val&bad"), ErrorCode.ENTITY_INVALID_VALUE);
-  });
 
   it("ErrorCode export contains all expected codes", function () {
     const expected = [

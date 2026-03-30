@@ -136,7 +136,6 @@ export interface TagOptions {
    * Add 'trim' to strip leading/trailing whitespace (not done by default).
    */
   valueParsers?: Array<string | ValueParser>;
-  separateTextProperty?: boolean;
 }
 
 /**
@@ -146,7 +145,44 @@ export interface TagOptions {
  */
 export type EntityMap = Record<string, string>;
 
-export interface EntityParseOptions {
+/**
+ * Options for DOCTYPE reading — controls whether entities are collected
+ * and enforces read-time security limits.
+ *
+ * Replacement-time configuration (which entity tables are active, expansion
+ * limits) belongs to EntitiesValueParser, not here.
+ */
+export interface DoctypeOptions {
+  /**
+   * Whether to collect entities declared in the DOCTYPE internal subset and
+   * forward them to the output builder for replacement.
+   * The DOCTYPE block is always read to consume it; this flag controls forwarding.
+   * Also requires 'replaceEntities' in the output builder's valueParsers chain.
+   *   false (default) → entities discarded
+   *   true            → entities collected and forwarded to the output builder
+   */
+  enabled?: boolean;
+
+  /**
+   * Max number of entities that may be declared in a DOCTYPE internal subset.
+   * Enforced by DocTypeReader at declaration time.
+   * Default: 100
+   */
+  maxEntityCount?: number;
+
+  /**
+   * Max bytes per entity definition value in DOCTYPE.
+   * Enforced by DocTypeReader at declaration time.
+   * Default: 10000
+   */
+  maxEntitySize?: number;
+}
+
+/**
+ * Constructor options for EntitiesValueParser.
+ * Controls which entity tables are active and replacement-time security limits.
+ */
+export interface EntitiesValueParserOptions {
   /**
    * Built-in XML entities: lt, gt, apos, quot, amp.
    *   true (default) → use built-in set
@@ -164,60 +200,30 @@ export interface EntityParseOptions {
   html?: boolean | null | EntityMap;
 
   /**
-   * Whether entities registered via `parser.addEntity()` are applied during replacement.
-   * Entities are always stored regardless of this flag — it only controls application.
+   * Whether entities registered via addEntity() are applied during replacement.
    *   true (default) → applied
-   *   false / null   → stored but not applied (easy on/off without removing registrations)
+   *   false / null   → stored but not applied
    */
   external?: boolean | null;
 
   /**
-   * Whether entities declared in a DOCTYPE internal subset are collected and applied.
-   * The DOCTYPE block is always read to consume it; this flag controls entity storage.
-   * Also requires 'replaceEntities' in valueParsers for replacement to happen.
-   *   false / null (default) → entities discarded
-   *   true                   → entities collected and applied during replacement
-   */
-  docType?: boolean | null;
-
-  /**
-   * Max number of entities that may be declared in a DOCTYPE internal subset.
-   * Enforced by DocTypeReader at declaration time.
-   * Default: 100
-   */
-  maxEntityCount?: number;
-
-  /**
-   * Max bytes per entity definition value in DOCTYPE.
-   * Enforced by DocTypeReader at declaration time.
-   * Default: 10000
-   */
-  maxEntitySize?: number;
-
-  /**
-   * Max total entity references expanded per document (across DOCTYPE, external, and built-in).
-   * Enforced during value parsing. Protects against Billion Laughs style attacks.
-   * Default: 1000
+   * Max total entity references expanded per document.
+   * Protects against Billion Laughs style attacks.
+   * Default: 0 (unlimited)
    */
   maxTotalExpansions?: number;
 
   /**
    * Max total characters added to output by entity expansion per document.
-   * Enforced during value parsing.
-   * Default: 100000
+   * Default: 0 (unlimited)
    */
   maxExpandedLength?: number;
-}
 
-export interface NumberParseOptions {
-  /** Parse 0x... hex notation. Default: true */
-  hex?: boolean;
-  /** Treat strings with leading zeros as numbers ('007' → 7). Default: true */
-  leadingZeros?: boolean;
-  /** Parse scientific notation (1e5, 2.5E-3). Default: true */
-  eNotation?: boolean;
-  /** How to handle Infinity values. Default: 'original' */
-  infinity?: 'original' | 'string' | 'number';
+  /**
+   * Initial external entity map loaded at construction time.
+   * @example { copy: '©', trade: '™' }
+   */
+  entities?: EntityMap;
 }
 
 // ─── Error handling ────────────────────────────────────────────────────────────
@@ -429,12 +435,13 @@ export interface X2jOptions {
   /** Tag parsing options including stop nodes and value parser chain */
   tags?: TagOptions;
 
-  // --- entity parsing ---
+  // --- DOCTYPE parsing ---
   /**
-   * Controls which entity sources are active and security limits.
-   * Entity replacement only happens when 'replaceEntities' is in the valueParsers chain.
+   * Controls whether DOCTYPE entities are collected and read-time security limits.
+   * Replacement behaviour (which entity tables, expansion limits) is configured
+   * on EntitiesValueParser directly.
    */
-  entityParseOptions?: EntityParseOptions;
+  doctypeOptions?: DoctypeOptions;
 
   // --- security ---
   /** Throw when a tag/attribute name collides with a nameFor.* or attributes.groupBy value. Default: false */
@@ -445,9 +452,6 @@ export interface X2jOptions {
   // --- filtering (path-expression-matcher) ---
   select?: string[];
   only?: string[];
-
-  // --- number parsing ---
-  numberParseOptions?: NumberParseOptions;
 
   // --- limits (DoS prevention) ---
   /**
@@ -523,6 +527,12 @@ export interface OutputBuilderInstance {
   addCdata(text: string): void;
   addDeclaration(): void;
   addPi(name: string): void;
+  /**
+   * Called by the XML parser after the DOCTYPE block is read.
+   * Implementations forward entities to any registered value parser
+   * that implements addDocTypeEntities().
+   */
+  addDocTypeEntities(entities: object): void;
   getOutput(): any;
   registeredValParsers: Record<string, ValueParser>;
   /**
@@ -586,15 +596,6 @@ export default class XMLParser {
   end(): any;
 
   /**
-   * Register a custom entity for replacement (without `&` and `;`).
-   * Entities are always stored regardless of `entityParseOptions.external`.
-   * The `external` flag controls whether they are applied during replacement.
-   * @throws {ParseError} with code `ENTITY_INVALID_KEY` or `ENTITY_INVALID_VALUE`.
-   * @example parser.addEntity('copy', '©');
-   */
-  addEntity(key: string, value: string): void;
-
-  /**
    * Return structural errors collected during the last parse call.
    * Only populated when `autoClose.collectErrors` is `true`.
    * Each entry: `{ type, tag, expected, line, col, index }`
@@ -649,6 +650,12 @@ export declare class BaseOutputBuilder implements OutputBuilderInstance {
   addRawValue(text: string): void;
   addDeclaration(): void;
   addPi(name: string): void;
+  /**
+   * Receive DOCTYPE entities from the XML parser and forward them to any
+   * registered value parser that implements addDocTypeEntities().
+   * Called automatically — no manual wiring needed.
+   */
+  addDocTypeEntities(entities: object): void;
   addTag(tag: { name: string }, matcher: any): void;
   closeTag(matcher: any): void;
   addValue(text: string, matcher: any): void;
@@ -676,15 +683,49 @@ export declare function booleanParserExt(val: string | string[]): boolean | stri
  */
 export declare function joinParser(val: any[], by?: string): string | any[];
 
+// ─── Entity parsing ────────────────────────────────────────────────────────────
+
 /**
- * Built-in `replaceEntities` value parser class.
- * Registered automatically under the key `'replaceEntities'` in every
- * OutputBuilder's `registeredValParsers` map.
+ * Low-level entity replacement engine.
+ * Holds entity tables (XML built-ins, HTML built-ins, external, DOCTYPE)
+ * and performs replacement with optional security limits.
  *
- * Import this type when you need to reference or subclass the parser directly.
+ * Most users should use EntitiesValueParser instead, which wraps this class
+ * and implements the ValueParser interface.
  */
-export declare class ReplaceEntitiesValueParser implements ValueParser {
-  constructor(entityParser: any);
+export declare class EntitiesParser {
+  constructor(options?: EntitiesValueParserOptions);
+  addExternalEntities(map: EntityMap): void;
+  addExternalEntity(key: string, val: string): void;
+  /** Load DOCTYPE entities and reset per-document expansion counters. */
+  addDocTypeEntities(entities: object): void;
+  replaceEntitiesValue(val: string): string;
+  parse(val: string): string;
+}
+
+/**
+ * Value parser that expands entity references in tag text and attribute values.
+ *
+ * Register an instance under 'replaceEntities' on an output builder:
+ * ```ts
+ * const evp = new EntitiesValueParser({ default: true, html: false });
+ * myBuilder.registerValueParser('replaceEntities', evp);
+ * ```
+ *
+ * External entities are registered directly on the instance:
+ * ```ts
+ * evp.addEntity('copy', '©');
+ * ```
+ *
+ * DOCTYPE entities are forwarded automatically by the output builder —
+ * no manual wiring needed.
+ */
+export declare class EntitiesValueParser implements ValueParser {
+  constructor(options?: EntitiesValueParserOptions);
+  /** Register a custom entity. Key must not contain '&' or ';'. */
+  addEntity(key: string, value: string): void;
+  /** Receive DOCTYPE entities from the output builder. Resets per-document counters. */
+  addDocTypeEntities(entities: object): void;
   parse(val: any, context?: object): any;
 }
 

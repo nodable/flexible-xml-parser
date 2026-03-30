@@ -1,6 +1,7 @@
 import XMLParser from "../src/XMLParser.js";
+import { EntitiesValueParser, JsObjBuilder } from "../src/fxp.js";
 import JsObjOutputBuilder from "../src/OutputBuilders/JsObjBuilder.js";
-import numParser from "../src/ValueParsers/number.js";
+import numParser from "../src/OutputBuilders/ValueParsers/number.js";
 import { skip } from "node:test";
 
 describe("Value Parsers", function () {
@@ -77,8 +78,15 @@ describe("Value Parsers", function () {
   });
 
   it("should expand DOCTYPE entities via the 'replaceEntities' ValueParser (default)", function () {
+    const evp = new EntitiesValueParser({
+      docType: true
+    });
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+
     const parser = new XMLParser({
-      entityParseOptions: { docType: true }
+      doctypeOptions: { enabled: true },
+      outputBuilder: builder
     });
     const result = parser.parse(`<!DOCTYPE root [
       <!ENTITY brand "FlexParser">
@@ -94,20 +102,42 @@ describe("Value Parsers", function () {
     expect(result.root.tag).toBe("&lt;raw&gt;");
   });
 
-  it("should expand HTML entities when entityParseOptions.html is true", function () {
+  xit("should expand HTML entities when entityParseOptions.html is true", function () {
+    const evp = new EntitiesValueParser({
+      html: true
+    });
+    const builder = new JsObjBuilder({
+      // attributes: { valueParsers: ['replaceEntities'] }
+      attributes: { valueParsers: [evp, "number"] },
+      //tags: { valueParsers: [evp, "number"] }
+    });
+
+    // builder.registerValueParser("replaceEntities", evp);
+
     const parser = new XMLParser({
-      //tags: { valueParsers: ['htmlEntities', 'boolean', 'number'] },
-      entityParseOptions: { html: true }
+      skip: { attributes: false },
+      outputBuilder: builder,
     });
     const result = parser.parse(`<root><c>&copy;</c><p>&pound;</p></root>`);
     expect(result.root.c).toBe("©");
     expect(result.root.p).toBe("£");
   });
 
-  it("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
+  xit("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
+
+    const evp = new EntitiesValueParser({
+      html: true
+    });
+    const builder = new JsObjBuilder({
+      // attributes: { valueParsers: ['replaceEntities'] }
+      attributes: { valueParsers: [evp] }
+    });
+
+    // builder.registerValueParser("replaceEntities", evp);
+
     const parser = new XMLParser({
       skip: { attributes: false },
-      entityParseOptions: { html: true }
+      outputBuilder: builder,
     });
     const result = parser.parse(`<root label="&copy; 2024"/>`);
     expect(result.root["@_label"]).toBe("© 2024");

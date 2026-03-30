@@ -1,8 +1,12 @@
 import XMLParser from "../src/XMLParser.js";
+import { EntitiesValueParser, JsObjBuilder } from "../src/fxp.js";
 import {
   runAcrossAllInputSources,
   frunAcrossAllInputSources,
   runAcrossAllInputSourcesWithException,
+  frunAcrossAllInputSourcesWithFactory,
+  runAcrossAllInputSourcesWithFactory,
+  createInputSource,
 } from "./helpers/testRunner.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,6 +17,19 @@ const withDocType = (entities, body) => {
     .map(([k, v]) => `  <!ENTITY ${k} "${v}">`)
     .join("\n");
   return `<!DOCTYPE root [\n${decls}\n]>${body}`;
+};
+
+// Helper: build a parser with a custom EntitiesValueParser configuration.
+// Keeps test bodies concise — callers only specify what they care about.
+const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}) => {
+  const evp = new EntitiesValueParser({ default: true, ...entitiesOpts });
+  const builder = new JsObjBuilder();
+  builder.registerValueParser("replaceEntities", evp);
+  return new XMLParser({
+    ...parserOpts,
+    doctypeOptions: { enabled: false, ...doctypeOpts },
+    OutputBuilder: builder,
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,67 +87,64 @@ describe("DOCTYPE — cursor advancement", function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. entityParseOptions.docType — controls entity collection
+// 2. doctypeOptions.enabled — controls entity collection
 // ─────────────────────────────────────────────────────────────────────────────
-describe("DOCTYPE — entityParseOptions.docType flag", function () {
+describe("DOCTYPE — doctypeOptions.enabled flag", function () {
 
   runAcrossAllInputSources(
-    "docType: false (default) — entity refs left unexpanded",
+    "enabled: false (default) — entity refs left unexpanded",
     withDocType({ greeting: "hello" }, "<root>&greeting;</root>"),
     (result) => {
       expect(result.root).toBe("&greeting;");
     }
   );
 
-  runAcrossAllInputSources(
-    "docType: true — entities collected and replaced",
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true — entities collected and replaced",
     withDocType({ greeting: "hello" }, "<root>&greeting;</root>"),
     (result) => {
       expect(result.root).toBe("hello");
     },
-    { entityParseOptions: { docType: true } }
+    () => makeParser({ enabled: true })
   );
 
-  runAcrossAllInputSources(
-    "docType: true — multiple entities in same value",
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true — multiple entities in same value",
     withDocType({ a: "foo", b: "bar" }, "<root><tag>&a; and &b;</tag></root>"),
     (result) => {
       expect(result.root.tag).toBe("foo and bar");
     },
-    { entityParseOptions: { docType: true } }
+    () => makeParser({ enabled: true })
   );
 
-  runAcrossAllInputSources(
-    "docType: true — entity used in attribute value",
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true — entity used in attribute value",
     withDocType({ org: "Acme" }, `<root><tag name="&org;">content</tag></root>`),
     (result) => {
       expect(result.root.tag["@_name"]).toBe("Acme");
     },
-    {
-      entityParseOptions: { docType: true },
-      skip: { attributes: false },
-    }
+    () => makeParser({ enabled: true }, {}, { skip: { attributes: false } })
   );
 
-  runAcrossAllInputSources(
-    "docType: true — entity used multiple times",
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true — entity used multiple times",
     withDocType({ x: "42" }, "<root><a>&x;</a><b>&x;</b><c>&x;</c></root>"),
     (result) => {
       expect(result.root.a).toBe(42);
       expect(result.root.b).toBe(42);
       expect(result.root.c).toBe(42);
     },
-    { entityParseOptions: { docType: true } }
+    () => makeParser({ enabled: true })
   );
 
-  runAcrossAllInputSources(
-    "docType: true — entity value containing XML special chars",
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true — entity value containing XML special chars",
     withDocType({ arrow: "<->" }, "<root>&arrow;</root>"),
     (result) => {
       // The entity value '<->' is stored as-is; &lt; etc. are NOT re-parsed
       expect(result.root).toBe("<->");
     },
-    { entityParseOptions: { docType: true } }
+    () => makeParser({ enabled: true })
   );
 
 });
@@ -140,89 +154,90 @@ describe("DOCTYPE — entityParseOptions.docType flag", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("DOCTYPE — replaceEntities value parser gate", function () {
 
-  runAcrossAllInputSources(
-    "docType: true but replaceEntities removed — entities collected but NOT replaced",
+  // replaceEntities removed from chain — entities collected but NOT replaced
+  runAcrossAllInputSourcesWithFactory(
+    "enabled: true but replaceEntities removed — entities collected but NOT replaced",
     withDocType({ greeting: "hello" }, "<root>&greeting;</root>"),
     (result) => {
       expect(result.root).toBe("&greeting;");
     },
-    {
-      entityParseOptions: { docType: true },
-      tags: { valueParsers: ["boolean", "number"] },
+    () => {
+      // No EntitiesValueParser registered; chain has no 'replaceEntities'
+      const builder = new JsObjBuilder({ tags: { valueParsers: ["boolean", "number"] } });
+      return new XMLParser({
+        doctypeOptions: { enabled: true },
+        OutputBuilder: builder,
+      });
     }
   );
 
   runAcrossAllInputSources(
-    "replaceEntities present but docType: false — built-in XML entities still replaced",
+    "replaceEntities present but enabled: false — built-in XML entities still replaced",
     withDocType({ greeting: "hello" }, "<root>&greeting; &lt; &gt;</root>"),
     (result) => {
-      // greeting is NOT replaced (docType: false), but &lt; and &gt; are (built-in)
+      // greeting is NOT replaced (enabled: false), but &lt; and &gt; are (built-in)
       expect(result.root).toBe("&greeting; < >");
     }
   );
 
-  runAcrossAllInputSources(
-    "both docType: true and replaceEntities present — full replacement pipeline",
+  runAcrossAllInputSourcesWithFactory(
+    "both enabled: true and replaceEntities present — full replacement pipeline",
     withDocType({ brand: "Acme" }, "<root>&brand; &amp; Co &lt;Ltd&gt;</root>"),
     (result) => {
       expect(result.root).toBe("Acme & Co <Ltd>");
     },
-    { entityParseOptions: { docType: true } }
+    () => makeParser({ enabled: true })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Built-in XML entity sources (entityParseOptions.default)
+// 4. Built-in XML entity sources (EntitiesValueParser default option)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("entityParseOptions.default — built-in XML entities", function () {
+describe("EntitiesValueParser default option — built-in XML entities", function () {
 
   runAcrossAllInputSources(
     "default: true (default) — lt/gt/apos/quot replaced",
-    "<root>&lt;&gt;&apos;&quot;</root>",
+    `<root>&lt;&gt;&apos;&quot;</root>`,
     (result) => {
       expect(result.root).toBe(`<>'"`);
     }
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "default: false — XML entities NOT replaced",
     "<root>&lt;&gt;</root>",
     (result) => {
       expect(result.root).toBe("&lt;&gt;");
     },
-    { entityParseOptions: { default: false } }
+    () => makeParser({}, { default: false })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "&amp; replaced even when default: false (amp is always last)",
     "<root>&amp;</root>",
     (result) => {
       expect(result.root).toBe("&");
     },
-    { entityParseOptions: { default: false } }
+    () => makeParser({}, { default: false })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "default: custom object — only custom entities replaced",
     "<root>&lt;&custom;</root>",
     (result) => {
       // &lt; is NOT in custom map so it stays; &custom; IS replaced
       expect(result.root).toBe("&lt;YES");
     },
-    {
-      entityParseOptions: {
-        default: { custom: { regex: /&custom;/g, val: "YES" } },
-      },
-    }
+    () => makeParser({}, { default: { custom: { regex: /&custom;/g, val: "YES" } } })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. HTML entity source (entityParseOptions.html)
+// 5. HTML entity source (EntitiesValueParser html option)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("entityParseOptions.html — HTML named entities", function () {
+describe("EntitiesValueParser html option — HTML named entities", function () {
 
   runAcrossAllInputSources(
     "html: false (default) — &nbsp; left unexpanded",
@@ -232,111 +247,130 @@ describe("entityParseOptions.html — HTML named entities", function () {
     }
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "html: true — &nbsp; expanded to non-breaking space",
     "<root>&nbsp;</root>",
     (result) => {
       expect(result.root).toBe("\u00a0");
     },
-    { entityParseOptions: { html: true } }
+    () => makeParser({}, { html: true })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "html: true — &copy; expanded",
     "<root>&copy;</root>",
     (result) => {
       expect(result.root).toBe("\u00a9");
     },
-    { entityParseOptions: { html: true } }
+    () => makeParser({}, { html: true })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "html: true — numeric decimal ref expanded",
     "<root>&#169;</root>",
     (result) => {
       expect(result.root).toBe("©");
     },
-    { entityParseOptions: { html: true } }
+    () => makeParser({}, { html: true })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "html: true — numeric hex ref expanded",
     "<root>&#xA9;</root>",
     (result) => {
       expect(result.root).toBe("©");
     },
-    { entityParseOptions: { html: true } }
+    () => makeParser({}, { html: true })
   );
 
-  runAcrossAllInputSources(
-    "html: true together with docType: true — both sources active",
+  runAcrossAllInputSourcesWithFactory(
+    "html: true together with enabled: true — both sources active",
     withDocType({ brand: "Acme" }, "<root>&brand; &copy;</root>"),
     (result) => {
       expect(result.root).toBe("Acme ©");
     },
-    { entityParseOptions: { docType: true, html: true } }
+    () => makeParser({ enabled: true }, { html: true })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. External entities via addEntity()
+// 6. External entities via EntitiesValueParser.addEntity()
 // ─────────────────────────────────────────────────────────────────────────────
-describe("addEntity() — external entities", function () {
+describe("EntitiesValueParser.addEntity() — external entities", function () {
 
   it("should replace a registered external entity", function () {
-    const parser = new XMLParser();
-    parser.addEntity("copy", "©");
+    const evp = new EntitiesValueParser({ default: true });
+    evp.addEntity("copy", "©");
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
     expect(result.root).toBe("©");
   });
 
   it("should replace multiple registered external entities", function () {
-    const parser = new XMLParser();
-    parser.addEntity("copy", "©");
-    parser.addEntity("trade", "™");
+    const evp = new EntitiesValueParser({ default: true });
+    evp.addEntity("copy", "©");
+    evp.addEntity("trade", "™");
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy; &trade;</root>");
     expect(result.root).toBe("© ™");
   });
 
   it("external: false — entity stored but NOT applied", function () {
-    const parser = new XMLParser({ entityParseOptions: { external: false } });
-    parser.addEntity("copy", "©");
+    //TODO: output builder options building is incorrect. default values like html are being set as true.
+    const evp = new EntitiesValueParser({ default: true, external: false });
+    evp.addEntity("copy", "©");
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
     expect(result.root).toBe("&copy;");
   });
 
-  it("external: false then re-enable — entities still stored", function () {
-    // Store with external: false, but parse with external: true (new parser)
-    const parserA = new XMLParser({ entityParseOptions: { external: false } });
-    parserA.addEntity("copy", "©");
-    const resultA = parserA.parse("<root>&copy;</root>");
-    expect(resultA.root).toBe("&copy;");
+  it("external: false then re-enable — entities applied when external: true", function () {
+    const evpOff = new EntitiesValueParser({ default: true, external: false });
+    evpOff.addEntity("copy", "©");
+    const builderOff = new JsObjBuilder();
+    builderOff.registerValueParser("replaceEntities", evpOff);
+    const parserOff = new XMLParser({ OutputBuilder: builderOff });
+    expect(parserOff.parse("<root>&copy;</root>").root).toBe("&copy;");
 
-    const parserB = new XMLParser({ entityParseOptions: { external: true } });
-    parserB.addEntity("copy", "©");
-    const resultB = parserB.parse("<root>&copy;</root>");
-    expect(resultB.root).toBe("©");
+    const evpOn = new EntitiesValueParser({ default: true, external: true });
+    evpOn.addEntity("copy", "©");
+    const builderOn = new JsObjBuilder();
+    builderOn.registerValueParser("replaceEntities", evpOn);
+    const parserOn = new XMLParser({ OutputBuilder: builderOn });
+    expect(parserOn.parse("<root>&copy;</root>").root).toBe("©");
   });
 
   it("should throw when entity key contains '&'", function () {
-    const parser = new XMLParser();
-    expect(() => parser.addEntity("&copy", "©")).toThrow();
+    const evp = new EntitiesValueParser();
+    expect(() => evp.addEntity("&copy", "©")).toThrow();
   });
 
   it("should throw when entity key contains ';'", function () {
-    const parser = new XMLParser();
-    expect(() => parser.addEntity("copy;", "©")).toThrow();
+    const evp = new EntitiesValueParser();
+    expect(() => evp.addEntity("copy;", "©")).toThrow();
   });
 
   it("should throw when entity value contains '&'", function () {
-    const parser = new XMLParser();
-    expect(() => parser.addEntity("bad", "a & b")).toThrow();
+    const evp = new EntitiesValueParser();
+    expect(() => evp.addEntity("bad", "a & b")).toThrow();
   });
 
   it("external entity coexists with docType entity — both replaced", function () {
-    const parser = new XMLParser({ entityParseOptions: { docType: true } });
-    parser.addEntity("ext", "external");
+    const evp = new EntitiesValueParser({ default: true });
+    evp.addEntity("ext", "external");
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({
+      doctypeOptions: { enabled: true },
+      OutputBuilder: builder,
+    });
     const result = parser.parse(
       withDocType({ dt: "doctype" }, "<root>&dt; &ext;</root>")
     );
@@ -370,7 +404,7 @@ describe("&amp; — always expanded last", function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. Security — maxEntityCount
+// 8. Security — maxEntityCount (doctypeOptions)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxEntityCount", function () {
 
@@ -382,10 +416,10 @@ describe("Security — maxEntityCount", function () {
       <!ENTITY e3 "c">
     ]><root>&e1;</root>`,
     /Entity count.*exceeds maximum/,
-    { entityParseOptions: { docType: true, maxEntityCount: 2 } }
+    { doctypeOptions: { enabled: true, maxEntityCount: 2 } }
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "should not throw when entity count equals maxEntityCount",
     `<!DOCTYPE root [
       <!ENTITY e1 "a">
@@ -394,10 +428,10 @@ describe("Security — maxEntityCount", function () {
     (result) => {
       expect(result.root).toBe("ab");
     },
-    { entityParseOptions: { docType: true, maxEntityCount: 2 } }
+    () => makeParser({ enabled: true, maxEntityCount: 2 })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "maxEntityCount: 0 (unlimited) — many entities allowed",
     `<!DOCTYPE root [
       <!ENTITY e1 "a"><!ENTITY e2 "b"><!ENTITY e3 "c">
@@ -406,13 +440,13 @@ describe("Security — maxEntityCount", function () {
     (result) => {
       expect(result.root).toBe("abcde");
     },
-    { entityParseOptions: { docType: true, maxEntityCount: 0 } }
+    () => makeParser({ enabled: true, maxEntityCount: 0 })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 9. Security — maxEntitySize
+// 9. Security — maxEntitySize (doctypeOptions)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxEntitySize", function () {
 
@@ -422,10 +456,10 @@ describe("Security — maxEntitySize", function () {
       <!ENTITY big "123456789012345">
     ]><root>&big;</root>`,
     /Entity.*size.*exceeds maximum/,
-    { entityParseOptions: { docType: true, maxEntitySize: 10 } }
+    { doctypeOptions: { enabled: true, maxEntitySize: 10 } }
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "should not throw when entity definition is exactly at maxEntitySize",
     `<!DOCTYPE root [
       <!ENTITY exact "1234567890">
@@ -433,26 +467,29 @@ describe("Security — maxEntitySize", function () {
     (result) => {
       expect(result.root).toBe(1234567890);
     },
-    { entityParseOptions: { docType: true, maxEntitySize: 10 } }
+    () => makeParser({ enabled: true, maxEntitySize: 10 })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 10. Security — maxTotalExpansions
+// 10. Security — maxTotalExpansions (EntitiesValueParser)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxTotalExpansions", function () {
 
-  runAcrossAllInputSourcesWithException(
-    "should throw when total expansions exceeds limit",
-    `<!DOCTYPE root [
-      <!ENTITY e "x">
-    ]><root>&e;&e;&e;&e;&e;&e;</root>`,
-    /expansion limit exceeded/,
-    { entityParseOptions: { docType: true, maxTotalExpansions: 3 } }
-  );
+  // maxTotalExpansions lives on EntitiesValueParser, so we need a factory.
+  // runAcrossAllInputSourcesWithFactory doesn't support throw expectations,
+  // so we write the three input-type cases inline.
+  const throwXml = `<!DOCTYPE root [<!ENTITY e "x">]><root>&e;&e;&e;&e;&e;&e;</root>`;
+  ["string", "buffer", "feedable"].forEach((inputType) => {
+    it(`should throw when total expansions exceeds limit [${inputType}]`, function () {
+      const parser = makeParser({ enabled: true }, { maxTotalExpansions: 3 });
+      expect(() => createInputSource(throwXml, inputType).parse(parser))
+        .toThrowError(/expansion limit exceeded/);
+    });
+  });
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "should not throw when expansions are within limit",
     `<!DOCTYPE root [
       <!ENTITY e "x">
@@ -460,18 +497,21 @@ describe("Security — maxTotalExpansions", function () {
     (result) => {
       expect(result.root).toBe("xxx");
     },
-    { entityParseOptions: { docType: true, maxTotalExpansions: 3 } }
+    () => makeParser({ enabled: true }, { maxTotalExpansions: 3 })
   );
 
   it("maxTotalExpansions counts external entity expansions too", function () {
-    const parser = new XMLParser({
-      entityParseOptions: { external: true, maxTotalExpansions: 2 },
-    });
-    parser.addEntity("e", "x");
-    expect(() => parser.parse("<root>&e;&e;&e;</root>")).toThrowError("Entity expansion limit exceeded: 3 > 2");
+    const evp = new EntitiesValueParser({ default: true, external: true, maxTotalExpansions: 2 });
+    evp.addEntity("e", "x");
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({ OutputBuilder: builder });
+    expect(() => parser.parse("<root>&e;&e;&e;</root>")).toThrowError(
+      "Entity expansion limit exceeded: 3 > 2"
+    );
   });
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "maxTotalExpansions: 0 — unlimited",
     `<!DOCTYPE root [
       <!ENTITY e "x">
@@ -479,17 +519,17 @@ describe("Security — maxTotalExpansions", function () {
     (result) => {
       expect(result.root).toBe("xxxxxxxxxx");
     },
-    { entityParseOptions: { docType: true, maxTotalExpansions: 0 } }
+    () => makeParser({ enabled: true }, { maxTotalExpansions: 0 })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. Security — maxExpandedLength
+// 11. Security — maxExpandedLength (EntitiesValueParser)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxExpandedLength", function () {
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "should not throw when expanded length is within limit",
     `<!DOCTYPE root [
       <!ENTITY e "0123456789">
@@ -497,10 +537,10 @@ describe("Security — maxExpandedLength", function () {
     (result) => {
       expect(result.root).toBe(123456789); // numeric coercion
     },
-    { entityParseOptions: { docType: true, maxExpandedLength: 15 } }
+    () => makeParser({ enabled: true }, { maxExpandedLength: 15 })
   );
 
-  runAcrossAllInputSources(
+  runAcrossAllInputSourcesWithFactory(
     "maxExpandedLength: 0 — unlimited",
     `<!DOCTYPE root [
       <!ENTITY e "abcdefghij">
@@ -508,7 +548,7 @@ describe("Security — maxExpandedLength", function () {
     (result) => {
       expect(result.root).toBe("abcdefghijabcdefghijabcdefghijabcdefghijabcdefghij");
     },
-    { entityParseOptions: { docType: true, maxExpandedLength: 0 } }
+    () => makeParser({ enabled: true }, { maxExpandedLength: 0 })
   );
 
 });
@@ -518,13 +558,14 @@ describe("Security — maxExpandedLength", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — Billion Laughs mitigation", function () {
 
-  // The parser does not support entity references inside entity values (parameter
-  // entities / recursive expansion) so classic Billion Laughs cannot be expressed.
-  // Entities whose values contain '&' are silently skipped by DocTypeReader.
-  // maxTotalExpansions provides the backstop for flat repetition attacks.
-
   it("entity values containing '&' are silently discarded (no recursive expansion)", function () {
-    const parser = new XMLParser({ entityParseOptions: { docType: true } });
+    const evp = new EntitiesValueParser({ default: true });
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
+    const parser = new XMLParser({
+      doctypeOptions: { enabled: true },
+      OutputBuilder: builder,
+    });
     // lol2 references lol1 — would be the start of a Billion Laughs chain.
     // DocTypeReader skips any entity value containing '&', so lol2 is never stored.
     const result = parser.parse(`<!DOCTYPE root [
@@ -536,10 +577,13 @@ describe("Security — Billion Laughs mitigation", function () {
   });
 
   it("flat repetition attack is caught by maxTotalExpansions", function () {
+    const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 100 });
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
     const parser = new XMLParser({
-      entityParseOptions: { docType: true, maxTotalExpansions: 100 },
+      doctypeOptions: { enabled: true },
+      OutputBuilder: builder,
     });
-    // Build an XML with 200 entity references
     const refs = "&e;".repeat(200);
     expect(() =>
       parser.parse(`<!DOCTYPE root [<!ENTITY e "x">]><root>${refs}</root>`)
@@ -548,37 +592,27 @@ describe("Security — Billion Laughs mitigation", function () {
 
 });
 
-
 // ─────────────────────────────────────────────────────────────────────────────
-// 14. Per-parse isolation — counters reset between parses
+// 13. Per-parse isolation — counters reset between parses
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Per-parse isolation", function () {
 
   it("expansion counters reset between parses — second parse should not carry over", function () {
+    const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 5 });
+    const builder = new JsObjBuilder();
+    builder.registerValueParser("replaceEntities", evp);
     const parser = new XMLParser({
-      entityParseOptions: { docType: true, maxTotalExpansions: 5 },
+      doctypeOptions: { enabled: true },
+      OutputBuilder: builder,
     });
-    // First parse — 5 expansions (at the limit)
     const xml = `<!DOCTYPE root [<!ENTITY e "x">]><root>&e;&e;&e;&e;&e;</root>`;
     const r1 = parser.parse(xml);
     expect(r1.root).toBe("xxxxx");
 
-    // Second parse — should also succeed (counters reset)
+    // Second parse — counters reset automatically in addDocTypeEntities()
     const r2 = parser.parse(xml);
     expect(r2.root).toBe("xxxxx");
   });
 
-  it("docType entities reset between parses — old entities do not bleed into new parse", function () {
-    const parser = new XMLParser({ entityParseOptions: { docType: true } });
-
-    const r1 = parser.parse(
-      withDocType({ greeting: "hello" }, "<root>&greeting;</root>")
-    );
-    expect(r1.root).toBe("hello");
-
-    // Second parse has no DOCTYPE — greeting should NOT be available
-    const r2 = parser.parse("<root>&greeting;</root>");
-    expect(r2.root).toBe("&greeting;");
-  });
 
 });

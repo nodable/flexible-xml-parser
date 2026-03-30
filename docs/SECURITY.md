@@ -172,28 +172,44 @@ a small document:
 <root>&c;</root>
 ```
 
-The parser is protected by four limits in `entityParseOptions`:
+The parser is protected by limits split across two places:
+
+**`doctypeOptions` on `XMLParser`** — enforced by `DocTypeReader` at declaration time:
 
 | Option               | Default    | Description                                              |
 |----------------------|------------|----------------------------------------------------------|
 | `maxEntityCount`     | `100`      | Max entities declared in a single DOCTYPE               |
 | `maxEntitySize`      | `10 000`   | Max bytes per entity definition value                   |
-| `maxTotalExpansions` | `1 000`    | Max total entity reference expansions per document      |
-| `maxExpandedLength`  | `100 000`  | Max total characters added by entity expansion          |
 
-DOCTYPE entity expansion is **disabled by default** (`entityParseOptions.docType: false`).
-To enable it — which you should only do for trusted input — set `docType: true` and
+**`EntitiesValueParser`** — enforced during value parsing (replacement time):
+
+| Option               | Default | Description                                              |
+|----------------------|---------|----------------------------------------------------------|
+| `maxTotalExpansions` | `0`     | Max total entity reference expansions per document (0 = unlimited) |
+| `maxExpandedLength`  | `0`     | Max total characters added by entity expansion (0 = unlimited)     |
+
+DOCTYPE entity expansion is **disabled by default** (`doctypeOptions.enabled: false`).
+To enable it — which you should only do for trusted input — set `enabled: true` and
 consider tightening the limits above:
 
 ```js
+import { XMLParser, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+const evp = new EntitiesValueParser({
+  default:            true,
+  maxTotalExpansions: 200,
+  maxExpandedLength:  10000,
+});
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
+
 const parser = new XMLParser({
-  entityParseOptions: {
-    docType: true,         // enable DOCTYPE entity expansion (trusted input only)
+  doctypeOptions: {
+    enabled:        true,   // enable DOCTYPE entity expansion (trusted input only)
     maxEntityCount: 20,
-    maxEntitySize: 1000,
-    maxTotalExpansions: 200,
-    maxExpandedLength: 10000,
-  }
+    maxEntitySize:  1000,
+  },
+  OutputBuilder: builder,
 });
 ```
 
@@ -227,20 +243,27 @@ any configured `nameFor.*` or `attributes.groupBy` value throw
 ## 5. Recommended configuration for untrusted input
 
 ```js
-import { XMLParser, ParseError, ErrorCode } from 'flex-xml-parser';
+import { XMLParser, ParseError, ErrorCode, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+
+// Configure EntitiesValueParser with replacement-time limits
+const evp = new EntitiesValueParser({
+  default:            true,
+  maxTotalExpansions: 500,
+  maxExpandedLength:  50000,
+});
+const builder = new JsObjBuilder();
+builder.registerValueParser('replaceEntities', evp);
 
 const parser = new XMLParser({
   // ── Structural limits ────────────────────────────────
   limits: {
-    maxNestedTags: 100,       // prevent stack overflow via deep nesting
-    maxAttributesPerTag: 50,  // prevent attribute flood
+    maxNestedTags:       100,  // prevent stack overflow via deep nesting
+    maxAttributesPerTag:  50,  // prevent attribute flood
   },
 
-  // ── Entity expansion ─────────────────────────────────
-  entityParseOptions: {
-    docType: false,           // never expand DOCTYPE entities from untrusted input
-    maxTotalExpansions: 500,
-    maxExpandedLength: 50000,
+  // ── DOCTYPE reading ──────────────────────────────────
+  doctypeOptions: {
+    enabled: false,  // never expand DOCTYPE entities from untrusted input
   },
 
   // ── Attribute parsing ────────────────────────────────
@@ -248,6 +271,8 @@ const parser = new XMLParser({
 
   // ── Name sanitisation ────────────────────────────────
   strictReservedNames: true,    // throw on name collisions rather than silently sanitise
+
+  OutputBuilder: builder,
 });
 
 try {

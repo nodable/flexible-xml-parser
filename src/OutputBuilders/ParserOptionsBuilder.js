@@ -1,40 +1,39 @@
-import booleanParser from "../ValueParsers/booleanParser.js";
-import currencyParser from "../ValueParsers/currency.js";
-import numberParser from "../ValueParsers/number.js";
-import trimParser from "../ValueParsers/trim.js";
+import booleanParser from "./ValueParsers/booleanParser.js";
+import currencyParser from "./ValueParsers/currency.js";
+import numberParser from "./ValueParsers/number.js";
+import trimParser from "./ValueParsers/trim.js";
+import EntitiesValueParser from "../EntityParser/EntitiesValueParser.js";
 
 const defaultOptions = {
   nameFor: {
-    text:    "#text",
+    text: "#text",
     comment: "",
-    cdata:   "",
+    cdata: "",
   },
   skip: {
     declaration: false,
-    pi:          false,
-    attributes:  true,
-    cdata:       false,
-    comment:     false,
-    nsPrefix:    false,
-    tags:        false,
+    pi: false,
+    attributes: true,
+    cdata: false,
+    comment: false,
+    nsPrefix: false,
+    tags: false,
   },
   tags: {
     valueParsers: [],
-    stopNodes:    [],
-    separateTextProperty: false,
+    stopNodes: [],
   },
   attributes: {
-    prefix:       "@_",
-    suffix:       "",
-    groupBy:      "",
+    prefix: "@_",
+    suffix: "",
+    groupBy: "",
     valueParsers: [],
   },
 };
 
 // Default chains: replaceEntities first (expand references), then type coercion.
-// No 'trim' — the parser does not trim by default.
-const defaultTagParsers  = ["replaceEntities", "boolean", "number"];
-const defaultAttrParsers = ["replaceEntities", "number",  "boolean"];
+const defaultTagParsers = ["replaceEntities", "boolean", "number"];
+const defaultAttrParsers = ["replaceEntities", "number", "boolean"];
 
 export function buildOptions(options) {
   const finalOptions = deepClone(defaultOptions);
@@ -85,11 +84,10 @@ function copyProperties(target, source) {
 
 export function registerCommonValueParsers() {
   return {
-    // 'entities' and 'htmlEntities' are injected per-parse by Xml2JsParser
-    // (they need the live entityParser instance that holds DocType entities).
-    "trim":     new trimParser(),
-    "boolean":  new booleanParser(),
-    "number":   new numberParser({ hex: true, leadingZeros: true, eNotation: true }),
+    "replaceEntities": new EntitiesValueParser({ default: true }),
+    "trim": new trimParser(),
+    "boolean": new booleanParser(),
+    "number": new numberParser({ hex: true, leadingZeros: true, eNotation: true }),
     "currency": new currencyParser(),
   };
 }

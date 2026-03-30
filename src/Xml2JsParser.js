@@ -4,8 +4,6 @@ import { readTagExp, readClosingTagName, flushAttributes } from './XmlPartReader
 import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
 import { Expression, Matcher } from 'path-expression-matcher';
-import EntitiesParser from './EntitiesParser.js';
-import ReplaceEntitiesValueParser from './ValueParsers/EntitiesParser.js';
 import { readDocType } from './DocTypeReader.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 import AutoCloseHandler from './AutoCloseHandler.js';
@@ -33,12 +31,6 @@ export default class Xml2JsParser {
     this.currentTagDetail = null;
     this.tagTextData = "";
     this.tagsStack = [];
-
-    const ep = options.entityParseOptions;
-
-    // EntitiesParser is configured entirely from entityParseOptions.
-    // It holds all entity tables and enforces security limits.
-    this.entityParser = new EntitiesParser(ep);
 
     this.matcher = new Matcher();
 
@@ -84,24 +76,16 @@ export default class Xml2JsParser {
   }
 
   /**
-   * Create an OutputBuilder instance, injecting the shared entityParser so
-   * that 'replaceEntities' in any valueParsers chain resolves correctly and
-   * shares the same entity table (including DocType entities collected during parsing).
+   * Create an OutputBuilder instance for this parse run.
+   * The output builder owns all value parser registration, including
+   * EntitiesValueParser — no injection needed from the parser side.
    */
   _createOutputBuilder() {
-    const inst = this.options.OutputBuilder.getInstance(this.options, this.readonlyMatcher);
-
-    // Register under 'replaceEntities' — the canonical value parser key.
-    //TODO: this seems wrong place of setting them. What if 
-    const vp = new ReplaceEntitiesValueParser(this.entityParser);
-    inst.registeredValParsers['replaceEntities'] = vp;
-
-    return inst;
+    return this.options.OutputBuilder.getInstance(this.options, this.readonlyMatcher);
   }
 
   parse(strData) {
     this.source = new StringSource(strData);
-    this.entityParser.resetCounters();
     this.initializeParser();
     this._parseAndFinalize();
     return this.outputBuilder.getOutput();
@@ -109,7 +93,6 @@ export default class Xml2JsParser {
 
   parseBytesArr(data) {
     this.source = new BufferSource(data);
-    this.entityParser.resetCounters();
     this.initializeParser();
     this._parseAndFinalize();
     return this.outputBuilder.getOutput();
@@ -363,12 +346,12 @@ export default class Xml2JsParser {
         readCdata(this);
       } else if (nextChar === "D") {
         // DOCTYPE is always read to consume its content and advance the cursor.
-        // Entities are stored only when entityParseOptions.docType is true.
+        // Entities are forwarded to the output builder only when doctypeOptions.enabled is true.
         const docTypeEntities = readDocType(this);
-        if (this.options.entityParseOptions.docType &&
+        if (this.options.doctypeOptions.enabled &&
           docTypeEntities &&
           Object.keys(docTypeEntities).length > 0) {
-          this.entityParser.addDocTypeEntities(docTypeEntities);
+          this.outputBuilder.addDocTypeEntities(docTypeEntities);
         }
       }
     } else if (startCh === "?") {

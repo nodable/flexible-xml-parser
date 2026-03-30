@@ -111,7 +111,7 @@ export function readDocType(parser) {
                         const [entityName, entityValue] = readEntityExp(parser);
 
                         if (entityValue.indexOf("&") === -1) {
-                            const ep = parser.options?.entityParseOptions;
+                            const ep = parser.options?.doctypeOptions;
                             if (ep?.maxEntityCount && entityCount >= ep.maxEntityCount) {
                                 throw new ParseError(
                                     `Entity count (${entityCount + 1}) exceeds maximum allowed (${ep.maxEntityCount})`,
@@ -300,7 +300,7 @@ function readEntityExp(parser) {
 
     const [entityValue] = readIdentifierVal(source, "entity");
 
-    const ep = parser.options?.entityParseOptions;
+    const ep = parser.options?.doctypeOptions;
     if (ep?.maxEntitySize && entityValue.length > ep.maxEntitySize) {
         throw new ParseError(
             `Entity "${entityName}" size (${entityValue.length}) exceeds maximum allowed size (${ep.maxEntitySize})`,

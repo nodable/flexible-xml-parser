@@ -107,6 +107,28 @@ export default class BaseOutputBuilder {
   }
 
   /**
+   * Receive DOCTYPE entities from the XML parser and forward them to any
+   * registered value parser that knows how to handle them.
+   *
+   * Called once per parse by Xml2JsParser immediately after the DOCTYPE block
+   * is read. The default implementation is intentionally generic — it forwards
+   * to every registered value parser that exposes an addDocTypeEntities()
+   * method, without coupling BaseOutputBuilder to any specific parser type.
+   *
+   * Subclasses may override this if they need different routing behaviour,
+   * but the default forwarding is sufficient for all standard builders.
+   *
+   * @param {object} entities — raw entity map from DocTypeReader
+   */
+  addDocTypeEntities(entities) {
+    for (const vp of Object.values(this.registeredValParsers)) {
+      if (typeof vp.addDocTypeEntities === 'function') {
+        vp.addDocTypeEntities(entities);
+      }
+    }
+  }
+
+  /**
    * Handle XML declaration (<?xml ... ?>).
    * Dropped when skip.declaration is true.
    */

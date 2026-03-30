@@ -37,14 +37,12 @@ export const defaultOptions = {
     groupBy: '',         // Group all attributes under this key; '' = inline with tag
     prefix: '@_',        // Prepended to attribute names in output
     suffix: '',          // Appended to attribute names in output
-    valueParsers: ['replaceEntities', 'number', 'boolean'],
   },
 
   // --- tags group ---
   tags: {
     unpaired: [],     // Tags that never have a closing tag (e.g. br, img, hr)
     stopNodes: [],    // Tag paths whose content is captured raw without parsing
-    valueParsers: ['replaceEntities', 'number', 'boolean'],
   },
 
   // --- security ---
@@ -54,49 +52,26 @@ export const defaultOptions = {
   // --- filtering (path-expression-matcher) ---
   only: [], // for future
 
-  // --- number parsing ---
-  numberParseOptions: {
-    hex: true,
-    leadingZeros: true,
-    eNotation: true,
-    infinity: "original",
-  },
-
-  // --- entity parsing ---
-  // Controls which entity sources are active and security limits.
+  // --- DOCTYPE parsing ---
+  // Controls whether DOCTYPE entities are collected and read-time security limits.
   //
-  // Entity source flags:
-  //   default  — true  → use built-in XML entities (lt, gt, apos, quot, amp)
-  //              false/null → disable built-in XML entity replacement
-  //              object → use this custom map instead of the built-in set
+  //   enabled         — false (default) → DOCTYPE is read (to consume it) but entities
+  //                                        are discarded and never forwarded to output builders
+  //                     true → collect DOCTYPE entities and forward them to the output builder
+  //                     Note: the output builder must have an EntitiesValueParser registered
+  //                     under 'replaceEntities' and 'replaceEntities' must be in its
+  //                     valueParsers chain for replacement to actually happen.
   //
-  //   html     — true  → use built-in HTML named entities (&nbsp;, &copy;, etc.)
-  //              false/null → disabled (default)
-  //              object → use a custom HTML entity map
+  // Read-time security limits (enforced by DocTypeReader at declaration time):
+  //   maxEntityCount  — max entities declared in a DOCTYPE (default: 100)
+  //   maxEntitySize   — max bytes per entity definition value (default: 10000)
   //
-  //   external — true (default) → apply entities registered via addEntity()
-  //              false/null → entities are stored but not applied
-  //
-  //   docType  — false (default) → DOCTYPE is read (to consume it) but entities
-  //                                 are discarded and never applied
-  //              true → collect DOCTYPE entities and apply them during replacement
-  //              Note: 'replaceEntities' must also be in valueParsers for replacement to happen.
-  //
-  // Security limits:
-  //   maxEntityCount      — max entities declared in a DOCTYPE (default: 100)
-  //   maxEntitySize       — max bytes per entity definition value (default: 10000)
-  //   maxTotalExpansions  — max total entity references expanded per document (default: 1000)
-  //   maxExpandedLength   — max total characters added by expansion per document (default: 100000)
-  entityParseOptions: {
-    default: true,      // built-in XML entities enabled
-    html: false,        // HTML entities disabled by default
-    external: true,     // addEntity() entities applied by default
-    docType: false,     // DOCTYPE entities discarded by default
-
+  // Replacement-time limits (maxTotalExpansions, maxExpandedLength) are configured
+  // on EntitiesValueParser directly — they are not part of doctypeOptions.
+  doctypeOptions: {
+    enabled: false,
     maxEntityCount: 100,
     maxEntitySize: 10000,
-    maxTotalExpansions: 1000,
-    maxExpandedLength: 100000,
   },
 
   // --- autoClose ---
