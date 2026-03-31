@@ -20,7 +20,7 @@
 Flex XML Parser is a flexible, high-performance XML parser for Node.js with:
 
 - **Clean option design** — grouped, purposeful options with sensible defaults
-- **Pluggable Output Builders** — `JsObjBuilder`, `JsArrBuilder`, `JsMinArrBuilder`, or your own
+- **Pluggable Output Builders** — `CompactObjBuilder`, `NodeTreeBuilder`, `JsMinArrBuilder`, or your own
 - **Value Parser Chain** — composable transformers: `replaceEntities`, `boolean`, `number`, `trim`, `currency`, or custom
 - **Integrated Security** — entity expansion limits, prototype-pollution prevention
 - **TypeScript Support** — complete type definitions
@@ -324,7 +324,7 @@ Entity source flags and replacement-time limits are configured on `EntitiesValue
 which is registered on the output builder — not on `XMLParser`.
 
 ```javascript
-import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({
   // ── Entity sources ───────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ const evp = new EntitiesValueParser({
   maxExpandedLength:  100000,  // Max total characters added by expansion per document
 });
 
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 const parser = new XMLParser({ OutputBuilder: builder });
 ```
@@ -360,7 +360,7 @@ Register custom entities directly on `EntitiesValueParser`:
 const evp = new EntitiesValueParser({ default: true });
 evp.addEntity('copy', '©');
 evp.addEntity('trade', '™');
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 const parser = new XMLParser({ OutputBuilder: builder });
 parser.parse('<root>&copy; &trade;</root>');  // { root: '© ™' }
@@ -403,7 +403,7 @@ Value parsers transform string values in sequence. Each receives the output of t
 
 ### Default chains
 
-The default chains are set by the output builder (`JsObjBuilder`, `JsArrBuilder`, etc.):
+The default chains are set by the output builder (`CompactObjBuilder`, `NodeTreeBuilder`, etc.):
 
 ```
 tags.valueParsers:       ['entity', 'boolean', 'number']
@@ -427,26 +427,26 @@ faithfully preserves whitespace. Add `'trim'` explicitly if needed.
 
 ```javascript
 // Disable entity replacement entirely — remove 'entity' from chain
-const builder = new JsObjBuilder({
+const builder = new CompactObjBuilder({
   tags:       { valueParsers: ['boolean', 'number'] },
   attributes: { valueParsers: ['number', 'boolean'] },
 });
 const parser = new XMLParser({ OutputBuilder: builder });
 
 // Raw strings everywhere — no transformation at all
-const builder2 = new JsObjBuilder({
+const builder2 = new CompactObjBuilder({
   tags:       { valueParsers: [] },
   attributes: { valueParsers: [] },
 });
 
 // Enable HTML entities
-import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 const evp = new EntitiesValueParser({ default: true, html: true });
-const builder3 = new JsObjBuilder();
+const builder3 = new CompactObjBuilder();
 builder3.registerValueParser('entity', evp);
 
 // Add trimming before entity expansion
-const builder4 = new JsObjBuilder({
+const builder4 = new CompactObjBuilder({
   tags: { valueParsers: ['trim', 'entity', 'boolean', 'number'] },
 });
 ```
@@ -518,7 +518,7 @@ const parser = new XMLParser({
 
 ## Output Builders
 
-### `JsObjBuilder` (default)
+### `CompactObjBuilder` (default)
 
 Produces a plain JS object. Repeated tags become arrays automatically.
 
@@ -529,13 +529,13 @@ Produces a plain JS object. Repeated tags become arrays automatically.
 { root: { item: ['a', 'b'] } }
 ```
 
-### `JsArrBuilder`
+### `NodeTreeBuilder`
 
 Preserves full document order. Each node: `{ tagname, child[], ':@'? }`.
 
 ```javascript
-import JsArrBuilder from 'flex-xml-parser/src/OutputBuilders/JsArrBuilder.js';
-const parser = new XMLParser({ OutputBuilder: new JsArrBuilder() });
+import NodeTreeBuilder from 'flex-xml-parser/src/OutputBuilders/NodeTreeBuilder.js';
+const parser = new XMLParser({ OutputBuilder: new NodeTreeBuilder() });
 ```
 
 
@@ -635,10 +635,10 @@ parser.parse(`
 ### DOCTYPE entities
 
 ```javascript
-import { XMLParser, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { XMLParser, EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({ default: true });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
@@ -663,7 +663,7 @@ const result = parser.parse(`
 ```javascript
 const evp = new EntitiesValueParser({ default: true });
 evp.addEntity('copy', '©');
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
@@ -681,7 +681,7 @@ const result = parser.parse(`
 
 ```javascript
 const evp = new EntitiesValueParser({ default: true, html: true });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({ OutputBuilder: builder });
@@ -754,7 +754,7 @@ parser.parse('<content>text</content>');
 **Disable all entity replacement** by removing `'entity'` from the output builder's chain:
 
 ```javascript
-const builder = new JsObjBuilder({
+const builder = new CompactObjBuilder({
   tags:       { valueParsers: ['boolean', 'number'] },
   attributes: { valueParsers: ['number', 'boolean'] },
 });
@@ -771,14 +771,14 @@ const parser = new XMLParser();
 **Tighten limits for untrusted input:**
 
 ```javascript
-import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({
   default:            true,
   maxTotalExpansions: 50,
   maxExpandedLength:  5000,
 });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
@@ -800,7 +800,7 @@ const parser = new XMLParser({
 ### Disable unused features
 
 ```javascript
-const builder = new JsObjBuilder({ tags: { valueParsers: [] } }); // raw strings, no type coercion
+const builder = new CompactObjBuilder({ tags: { valueParsers: [] } }); // raw strings, no type coercion
 const parser = new XMLParser({ OutputBuilder: builder });
 ```
 

@@ -52,7 +52,7 @@ export function readPiTag(parser) {
   if (tagExp.tagName === "xml") {
     //TODO: verify it is very first tag else error
     if (!parser.options.skip.declaration) {
-      parser.outputBuilder.addDeclaration();
+      parser.outputBuilder.addDeclaration("?xml");
     }
   } else if (!parser.options.skip.pi) {
     parser.outputBuilder.addInstruction("?" + tagExp.tagName);

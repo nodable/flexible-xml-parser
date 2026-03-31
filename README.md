@@ -5,7 +5,7 @@ A flexible, high-performance XML parser for Node.js with pluggable output builde
 ## Features
 
 - **Multiple input modes** — string, Buffer, Uint8Array, Node.js streams, and incremental feed/end API. More can be created easily.
-- **Pluggable output builders** — swap `JsObjBuilder` for `JsArrBuilder`, `OrderedKeyValueBuilder`, or your own subclass of `BaseOutputBuilder`
+- **Pluggable output builders** — swap `CompactObjBuilder` for `NodeTreeBuilder`, `OrderedKeyValueBuilder`, or your own subclass of `BaseOutputBuilder`
 - **Composable value parser chain** — built-in parsers for entities, numbers, booleans, trim, and currency; custom parsers receive full context
 - **Path-expression stop nodes** — capture raw content inside matched tags (e.g. `<script>`, `<style>`) without further XML parsing; configurable enclosure skipping for nested quotes and comments
 - **Entity expansion control** — built-in XML entities, optional HTML entities, external/registered entities, DocType-declared entities; all with DoS-prevention limits
@@ -116,7 +116,7 @@ new XMLParser({
   // Lenient HTML-mode recovery
   autoClose: null,  // null = strict; 'html' = recover from unclosed/mismatched tags
 
-  // Pluggable output builder (default: JsObjBuilder)
+  // Pluggable output builder (default: CompactObjBuilder)
   OutputBuilder: null,
 });
 ```
@@ -153,12 +153,12 @@ new XMLParser({
 });
 ```
 
-Register a reusable custom parser by name via `JsObjBuilder`:
+Register a reusable custom parser by name via `CompactObjBuilder`:
 
 ```javascript
-import { JsObjBuilder } from 'flexible-xml-parser';
+import { CompactObjBuilder } from 'flexible-xml-parser';
 
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('price', new PriceParser());
 
 new XMLParser({
@@ -193,10 +193,10 @@ new XMLParser({
 ## Pluggable output builders
 
 ```javascript
-import XMLParser, { JsObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
+import XMLParser, { CompactObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
 
-// JsObjBuilder — default JS object output with extra options
-const builder = new JsObjBuilder({
+// CompactObjBuilder — default JS object output with extra options
+const builder = new CompactObjBuilder({
   alwaysArray:   ['item'],           // tag names or path expressions always wrapped in []
   forceArray:    (matcher) => ...,   // function-based array forcing
   forceTextNode: false,              // always emit nameFor.text even for text-only tags
@@ -267,7 +267,7 @@ parser.addEntity('trade', '™');
 ## TypeScript
 
 ```typescript
-import XMLParser, { X2jOptions, JsObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
+import XMLParser, { X2jOptions, CompactObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
 
 const options: X2jOptions = {
   skip:    { attributes: false, nsPrefix: true },

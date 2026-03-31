@@ -1,14 +1,14 @@
 import XMLParser from "../src/XMLParser.js";
-import JsArrBuilder from "../src/OutputBuilders/JsArrBuilder.js";
+import NodeTreeBuilder from "../src/OutputBuilders/NodeTreeBuilder.js";
 import { runAcrossAllInputSources, runAcrossAllInputSourcesWithFactory } from "./helpers/testRunner.js";
 import { buildOptions } from "../src/OutputBuilders/ParserOptionsBuilder.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build parser options for JsArrBuilder tests.
+ * Build parser options for NodeTreeBuilder tests.
  *
- * @param {object} builderOptions - options passed to the JsArrBuilder factory
+ * @param {object} builderOptions - options passed to the NodeTreeBuilder factory
  *                                  (e.g. { compactLeaf: true })
  * @param {object} parserOptions  - options passed to XMLParser
  *                                  (e.g. { skip: { attributes: false } })
@@ -16,7 +16,7 @@ import { buildOptions } from "../src/OutputBuilders/ParserOptionsBuilder.js";
  */
 function makeOptions(builderOptions = {}, parserOptions = {}) {
   return {
-    OutputBuilder: new JsArrBuilder(builderOptions),
+    OutputBuilder: new NodeTreeBuilder(builderOptions),
     ...parserOptions,
   };
 }
@@ -24,7 +24,7 @@ function makeOptions(builderOptions = {}, parserOptions = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Basic structure
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — basic structure", function () {
+describe("NodeTreeBuilder — basic structure", function () {
 
   runAcrossAllInputSources(
     "single root element is returned directly (not wrapped in an outer array)",
@@ -70,7 +70,7 @@ describe("JsArrBuilder — basic structure", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Text nodes
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — text nodes", function () {
+describe("NodeTreeBuilder — text nodes", function () {
 
   runAcrossAllInputSources(
     "text content is stored as { '#text': value } inside the child array",
@@ -120,7 +120,7 @@ describe("JsArrBuilder — text nodes", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. Attributes
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — attributes", function () {
+describe("NodeTreeBuilder — attributes", function () {
 
   runAcrossAllInputSources(
     "attributes are stored under ':@' on the Node",
@@ -158,7 +158,7 @@ describe("JsArrBuilder — attributes", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. compactLeaf disabled (default)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — compactLeaf disabled (default)", function () {
+describe("NodeTreeBuilder — compactLeaf disabled (default)", function () {
 
   runAcrossAllInputSources(
     "leaf node retains full Node structure with a child array",
@@ -185,7 +185,7 @@ describe("JsArrBuilder — compactLeaf disabled (default)", function () {
       // When supplied only via parserOptions the builder ignores it and keeps
       // the full Node structure.
       return new XMLParser({
-        OutputBuilder: new JsArrBuilder(), // no compactLeaf here
+        OutputBuilder: new NodeTreeBuilder(), // no compactLeaf here
         compactLeaf: true, // wrong layer — parser option, not builder option
       });
     }
@@ -196,7 +196,7 @@ describe("JsArrBuilder — compactLeaf disabled (default)", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. compactLeaf enabled
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — compactLeaf enabled", function () {
+describe("NodeTreeBuilder — compactLeaf enabled", function () {
 
   runAcrossAllInputSources(
     "single leaf node is compacted to { [tagName]: value }",
@@ -306,7 +306,7 @@ describe("JsArrBuilder — compactLeaf enabled", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. compactLeaf with attributes — node must NOT be compacted
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — compactLeaf blocked by attributes", function () {
+describe("NodeTreeBuilder — compactLeaf blocked by attributes", function () {
 
   runAcrossAllInputSources(
     "leaf node with attributes keeps full Node structure",
@@ -336,7 +336,7 @@ describe("JsArrBuilder — compactLeaf blocked by attributes", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. compactLeaf with stop nodes
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — compactLeaf with stop nodes", function () {
+describe("NodeTreeBuilder — compactLeaf with stop nodes", function () {
 
   it("stop node with raw content is compacted to { tagName: rawContent }", function () {
     const onStopNode = jasmine.createSpy("onStopNode");
@@ -406,7 +406,7 @@ describe("JsArrBuilder — compactLeaf with stop nodes", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 8. compactLeaf with CDATA
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — compactLeaf with CDATA", function () {
+describe("NodeTreeBuilder — compactLeaf with CDATA", function () {
 
   runAcrossAllInputSources(
     "CDATA merged into text (nameFor.cdata = '') is compacted normally",
@@ -436,7 +436,7 @@ describe("JsArrBuilder — compactLeaf with CDATA", function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. onClose callback interaction
 // ─────────────────────────────────────────────────────────────────────────────
-describe("JsArrBuilder — onClose callback", function () {
+describe("NodeTreeBuilder — onClose callback", function () {
 
   runAcrossAllInputSourcesWithFactory(
     "onClose returning truthy suppresses the node push regardless of compactLeaf",

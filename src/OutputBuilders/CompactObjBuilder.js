@@ -24,11 +24,11 @@ export default class OutputBuilder {
 
   getInstance(parserOptions, readonlyMatcher) {
     const valParsers = { ...this.commonValParsers };
-    return new JsObjBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
+    return new CompactObjBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
 
-class JsObjBuilder extends BaseOutputBuilder {
+class CompactObjBuilder extends BaseOutputBuilder {
 
   constructor(parserOptions, builderOptions, registeredValParsers, readonlyMatcher) {
     super(readonlyMatcher);
@@ -296,4 +296,4 @@ function isEmpty(obj) {
   return Object.keys(obj).length === 0;
 }
 
-export { JsObjBuilder };
+export { CompactObjBuilder as CompactObjBuilder };

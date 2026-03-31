@@ -118,7 +118,7 @@ To use a custom enclosure set with an `Expression`, wrap it in an object:
 
 ## `onStopNode` callback
 
-`JsArrBuilder` and `JsObjBuilder` fire an `onStopNode` callback (if supplied) each time a stop
+`NodeTreeBuilder` and `CompactObjBuilder` fire an `onStopNode` callback (if supplied) each time a stop
 node is fully collected, before its raw content is added to the output tree.  This is useful for
 side-channel analysis without post-processing the output.
 

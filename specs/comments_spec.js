@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import JsArrBuilder from "../src/OutputBuilders/JsArrBuilder.js";
+import NodeTreeBuilder from "../src/OutputBuilders/NodeTreeBuilder.js";
 import { runAcrossAllInputSources } from "./helpers/testRunner.js";
 
 describe("Comments", function () {
@@ -25,7 +25,7 @@ describe("Comments", function () {
   );
 
   runAcrossAllInputSources(
-    "should preserve order with comments when using JsArrBuilder",
+    "should preserve order with comments when using NodeTreeBuilder",
     `
       <!--Root comment-->
       <root>
@@ -39,7 +39,7 @@ describe("Comments", function () {
     },
     {
       nameFor: { comment: "#comment" },
-      OutputBuilder: new JsArrBuilder(),
+      OutputBuilder: new NodeTreeBuilder(),
     }
   );
 

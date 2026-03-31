@@ -33,7 +33,7 @@ OrderedOutputBuilder
 ]
 ```
 
-OrderedKeyValOutputBuilder
+NodeTreeBuilder
 ```js
 {
   "tagname": "root",
@@ -65,7 +65,7 @@ How to use
 
 const parserOptions = {}
 const parser = new XMLParser({
-    OutputBuilder: new JsArrBuilder(builderOptions),
+    OutputBuilder: new NodeTreeBuilder(builderOptions),
     ...parserOptions,
   });
 
@@ -88,7 +88,7 @@ Collapse a pure-text or stop-node leaf to `{ tagName: value }` instead of the fu
 ```js
 const parserOptions = {}
 const parser = new XMLParser({
-    OutputBuilder: new JsArrBuilder(builderOptions),
+    OutputBuilder: new NodeTreeBuilder(builderOptions),
     ...parserOptions,
     compactLeaf: true
   });
@@ -105,7 +105,7 @@ Output
 ```js
 const parserOptions = { stopNode : "..child" }
 const parser = new XMLParser({
-    OutputBuilder: new JsArrBuilder(builderOptions),
+    OutputBuilder: new NodeTreeBuilder(builderOptions),
     ...parserOptions,
   });
 

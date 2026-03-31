@@ -3,8 +3,8 @@ export { default as XMLParser, default } from './XMLParser.js';
 
 // Output Builders
 export { default as BaseOutputBuilder, ElementType } from './OutputBuilders/BaseOutputBuilder.js';
-export { default as JsObjBuilder } from './OutputBuilders/JsObjBuilder.js';
-// JsArrBuilder — published separately, not exported here
+export { default as CompactObjBuilder } from './OutputBuilders/CompactObjBuilder.js';
+// NodeTreeBuilder — published separately, not exported here
 // OrderedKeyValueBuilder — published separately, not exported here
 
 // Entity parsing — exported for output builder authors and advanced users

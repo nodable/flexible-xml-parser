@@ -2,7 +2,7 @@
 import XMLParser from "../src/XMLParser.js";
 import { ParseError, ErrorCode } from "../src/ParseError.js";
 import { runAcrossAllInputSources, runAcrossAllInputSourcesWithException } from "./helpers/testRunner.js";
-import { EntitiesValueParser, JsObjBuilder } from "../src/fxp.js";
+import { EntitiesValueParser, CompactObjBuilder } from "../src/fxp.js";
 
 describe("Entity Parser", function () {
 

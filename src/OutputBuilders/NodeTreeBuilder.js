@@ -18,11 +18,11 @@ export default class OutputBuilder {
 
   getInstance(parserOptions, readonlyMatcher) {
     const valParsers = { ...this.commonValParsers };
-    return new JsArrBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
+    return new NodeTreeBuilder(parserOptions, this.options, valParsers, readonlyMatcher);
   }
 }
 
-class JsArrBuilder extends BaseOutputBuilder {
+class NodeTreeBuilder extends BaseOutputBuilder {
 
   constructor(parserOptions, builderOptions, registeredValParsers, readonlyMatcher) {
     super(readonlyMatcher);
@@ -140,4 +140,4 @@ class Node {
   }
 }
 
-export { JsArrBuilder };
+export { NodeTreeBuilder };

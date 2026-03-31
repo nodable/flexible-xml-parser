@@ -236,11 +236,11 @@ Use it to make structural decisions based on path:
 
 ```js
 import { Expression } from 'path-expression-matcher';
-import JsObjOutputBuilder, { JsObjBuilder } from 'flex-xml-parser/src/OutputBuilders/JsObjBuilder.js';
+import JsObjOutputBuilder, { CompactObjBuilder } from 'flex-xml-parser/src/OutputBuilders/CompactObjBuilder.js';
 
 const legacyExpr = new Expression("root.legacyField");
 
-class MigrationBuilder extends JsObjBuilder {
+class MigrationBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     // Rename a legacy tag on the fly
     if (matcher.matches(legacyExpr)) {
@@ -269,7 +269,7 @@ Suppressing only one desynchronises the builder's internal stack:
 ```js
 const skipExpr = new Expression("root.internal");
 
-class FilterBuilder extends JsObjBuilder {
+class FilterBuilder extends CompactObjBuilder {
   constructor(...args) {
     super(...args);
     this._skipDepth = 0;

@@ -1,6 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
 import EntitiesValueParser from "../src/EntityParser/EntitiesParser.js";
-import JsObjOutputBuilder from "../src/OutputBuilders/JsObjBuilder.js";
+import JsObjOutputBuilder from "../src/OutputBuilders/CompactObjBuilder.js";
 import numParser from "../src/OutputBuilders/ValueParsers/number.js";
 import { skip } from "node:test";
 

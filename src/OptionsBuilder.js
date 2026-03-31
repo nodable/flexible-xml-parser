@@ -1,4 +1,4 @@
-import JsObjOutputBuilder from './OutputBuilders/JsObjBuilder.js';
+import JsObjOutputBuilder from './OutputBuilders/CompactObjBuilder.js';
 import { Expression } from 'path-expression-matcher';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';

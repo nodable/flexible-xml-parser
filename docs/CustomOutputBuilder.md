@@ -2,7 +2,7 @@
 
 Flex XML Parser deliberately removed options like `transformTagName`, `transformAttributeName`,
 and `updateTag`. Instead, these responsibilities are handled by subclassing the built-in
-`JsObjBuilder`. This keeps the core parser lean while giving you complete, composable control
+`CompactObjBuilder`. This keeps the core parser lean while giving you complete, composable control
 over the output structure.
 
 This guide shows how to achieve the most common requirements.
@@ -15,10 +15,10 @@ Every example in this guide follows the same three steps:
 
 ```js
 import XMLParser from "flex-xml-parser";
-import JsObjOutputBuilder, { JsObjBuilder } from "flex-xml-parser/src/OutputBuilders/JsObjBuilder.js";
+import JsObjOutputBuilder, { CompactObjBuilder } from "flex-xml-parser/src/OutputBuilders/CompactObjBuilder.js";
 
-// 1. Subclass JsObjBuilder and override only the method(s) you need
-class MyBuilder extends JsObjBuilder {
+// 1. Subclass CompactObjBuilder and override only the method(s) you need
+class MyBuilder extends CompactObjBuilder {
   // override addTag, addAttribute, closeTag, or addValue
 }
 
@@ -55,7 +55,7 @@ In every override, call `super.method(...)` to continue normal processing. Omit 
 ### Lower-case all tag names
 
 ```js
-class LowerCaseTagBuilder extends JsObjBuilder {
+class LowerCaseTagBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
   }
@@ -71,7 +71,7 @@ parser.parse(`<ROOT><CHILD>value</CHILD></ROOT>`);
 ### Rename a specific tag
 
 ```js
-class RenameTagBuilder extends JsObjBuilder {
+class RenameTagBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     const name = tag.name === "Person" ? "person" : tag.name;
     super.addElement({ ...tag, name }, matcher);
@@ -82,7 +82,7 @@ class RenameTagBuilder extends JsObjBuilder {
 ### Strip namespace prefixes
 
 ```js
-class StripNsPrefixBuilder extends JsObjBuilder {
+class StripNsPrefixBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     const name = tag.name.includes(":") ? tag.name.split(":")[1] : tag.name;
     super.addElement({ ...tag, name }, matcher);
@@ -106,7 +106,7 @@ To skip a tag you need to track nesting depth, because the parser will still cal
 and `closeTag` for every child inside the skipped tag.
 
 ```js
-class SkipTagBuilder extends JsObjBuilder {
+class SkipTagBuilder extends CompactObjBuilder {
   constructor(...args) {
     super(...args);
     this._skipDepth = 0;
@@ -153,7 +153,7 @@ Enable attribute parsing with `skip: { attributes: false }`.
 ### Lower-case all attribute names
 
 ```js
-class LowerCaseAttrBuilder extends JsObjBuilder {
+class LowerCaseAttrBuilder extends CompactObjBuilder {
   addAttribute(name, value) {
     super.addAttribute(name.toLowerCase(), value);
   }
@@ -172,7 +172,7 @@ parser.parse(`<Item ID="1" Lang="en" />`);
 ### Rename a specific attribute
 
 ```js
-class RenameAttrBuilder extends JsObjBuilder {
+class RenameAttrBuilder extends CompactObjBuilder {
   addAttribute(name, value) {
     super.addAttribute(name === "class" ? "className" : name, value);
   }
@@ -186,7 +186,7 @@ class RenameAttrBuilder extends JsObjBuilder {
 Return without calling `super` to silently drop an attribute.
 
 ```js
-class DropAttrBuilder extends JsObjBuilder {
+class DropAttrBuilder extends CompactObjBuilder {
   addAttribute(name, value) {
     const INTERNAL = ["debug", "internal", "tmp"];
     if (INTERNAL.includes(name)) return;
@@ -209,7 +209,7 @@ before deciding what to keep — for example to normalise keys that depend on ea
 collect them first, then emit in `addTag`.
 
 ```js
-class NormaliseAttrsBuilder extends JsObjBuilder {
+class NormaliseAttrsBuilder extends CompactObjBuilder {
   constructor(...args) {
     super(...args);
     this._pending = {};
@@ -250,7 +250,7 @@ Inject attributes programmatically by calling `super.addAttribute` before `super
 Attributes not present in the XML but added this way appear in the output exactly like real ones.
 
 ```js
-class InjectAttrBuilder extends JsObjBuilder {
+class InjectAttrBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     super.addAttribute("_tag", tag.name); // inject before super.addTag
     super.addElement(tag, matcher);
@@ -271,7 +271,7 @@ If you are writing multiple custom builders in the same project, extract the fac
 into a helper to avoid repetition:
 
 ```js
-import JsObjOutputBuilder, { JsObjBuilder } from "flex-xml-parser/src/OutputBuilders/JsObjBuilder.js";
+import JsObjOutputBuilder, { CompactObjBuilder } from "flex-xml-parser/src/OutputBuilders/CompactObjBuilder.js";
 
 export function makeFactory(BuilderClass) {
   return {
@@ -297,7 +297,7 @@ const parser = new XMLParser({ OutputBuilder: makeFactory(LowerCaseTagBuilder) }
 All overrides compose naturally in a single subclass:
 
 ```js
-class NormalisedBuilder extends JsObjBuilder {
+class NormalisedBuilder extends CompactObjBuilder {
   addElement(tag, matcher) {
     super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
   }

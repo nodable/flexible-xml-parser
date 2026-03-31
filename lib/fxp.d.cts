@@ -478,11 +478,11 @@ interface X2jOptions {
   feedable?: FeedableOptions;
 
   // --- output builder ---
-  /** Pluggable output builder instance. Default: JsObjBuilder */
+  /** Pluggable output builder instance. Default: CompactObjBuilder */
   OutputBuilder?: OutputBuilderFactory | null;
 
   /**
-   * Callback fired by `JsArrBuilder` and `JsObjBuilder` whenever a stop node
+   * Callback fired by `NodeTreeBuilder` and `CompactObjBuilder` whenever a stop node
    * is fully collected, before the raw content is added to the output tree.
    *
    * Receive the tag detail, the raw unparsed content, and a read-only path
@@ -523,7 +523,7 @@ interface OutputBuilderInstance {
   addValue(text: string, matcher: any): void;
   addAttribute(name: string, value: any): void;
   addComment(text: string): void;
-  addCdata(text: string): void;
+  addLiteral(text: string): void;
   addDeclaration(): void;
   addInstruction(name: string): void;
   getOutput(): any;
@@ -531,7 +531,7 @@ interface OutputBuilderInstance {
   /**
    * Optional hook called by the parser when a stop node is fully collected.
    * Implement this in custom OutputBuilder classes to handle stop-node content.
-   * `JsArrBuilder` and `JsObjBuilder` implement it and delegate to the
+   * `NodeTreeBuilder` and `CompactObjBuilder` implement it and delegate to the
    * `options.onStopNode` callback when supplied.
    */
   onStopNode?(
@@ -614,7 +614,7 @@ default class XMLParser {
 
 { XMLParser };
 
-class JsObjBuilder implements OutputBuilderFactory {
+class CompactObjBuilder implements OutputBuilderFactory {
   constructor(options?: Partial<X2jOptions>);
   getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
   registerValueParser(name: string, parser: ValueParser): void;
@@ -648,7 +648,7 @@ declare class BaseOutputBuilder implements OutputBuilderInstance {
   addAttribute(name: string, value: any, matcher: any): void;
   parseValue(val: any, valParsers: Array<string | ValueParser>, context?: object): any;
   addComment(text: string): void;
-  addCdata(text: string): void;
+  addLiteral(text: string): void;
   addRawValue(text: string): void;
   addDeclaration(): void;
   addInstruction(name: string): void;

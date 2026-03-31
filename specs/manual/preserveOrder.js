@@ -1,11 +1,11 @@
 import XMLParser from "../../src/XMLParser.js";
-import JsArrBuilder from "../../src/OutputBuilders/JsArrBuilder.js";
+import NodeTreeBuilder from "../../src/OutputBuilders/NodeTreeBuilder.js";
 
 const builderOptions = {}
 const parserOptions = {}
 
 const parser = new XMLParser({
-  OutputBuilder: new JsArrBuilder(builderOptions),
+  OutputBuilder: new NodeTreeBuilder(builderOptions),
   ...parserOptions,
 });
 

@@ -46,8 +46,8 @@ flex-xml-parser/
 ├── DocTypeReader.js          # DOCTYPE parsing
 ├── OutputBuilders/           # Output format builders
 │   ├── BaseOutputBuilder.js
-│   ├── JsObjBuilder.js
-│   ├── JsArrBuilder.js
+│   ├── CompactObjBuilder.js
+│   ├── NodeTreeBuilder.js
 │   └── JsMinArrBuilder.js
 ├── valueParsers/             # Value transformation
 │   ├── trim.js

@@ -2,6 +2,8 @@
 import { Expression } from "path-expression-matcher";
 import XMLParser from "../src/XMLParser.js";
 import { runAcrossAllInputSources, runAcrossAllInputSourcesWithException } from "./helpers/testRunner.js";
+import OutputBuilder from "../src/OutputBuilders/CompactObjBuilder.js";
+import { NodeTreeBuilder } from "../src/OutputBuilders/NodeTreeBuilder.js";
 
 
 describe("Temp", function () {
@@ -28,9 +30,7 @@ describe("Temp", function () {
     </root>`;
 
     const parser = new XMLParser({
-      tags: {
-        stopNodes: [{ expression: "root.stopNode", nested: true }]
-      }
+      OutputBuilder: new NodeTreeBuilder()
     });
     // for (let i = 0; i < xmlData.length; i++) {
     //   const ch = xmlData[i];

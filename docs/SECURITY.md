@@ -193,14 +193,14 @@ To enable it — which you should only do for trusted input — set `enabled: tr
 consider tightening the limits above:
 
 ```js
-import { XMLParser, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { XMLParser, EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({
   default:            true,
   maxTotalExpansions: 200,
   maxExpandedLength:  10000,
 });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
@@ -243,7 +243,7 @@ any configured `nameFor.*` or `attributes.groupBy` value throw
 ## 5. Recommended configuration for untrusted input
 
 ```js
-import { XMLParser, ParseError, ErrorCode, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { XMLParser, ParseError, ErrorCode, EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 // Configure EntitiesValueParser with replacement-time limits
 const evp = new EntitiesValueParser({
@@ -251,7 +251,7 @@ const evp = new EntitiesValueParser({
   maxTotalExpansions: 500,
   maxExpandedLength:  50000,
 });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({

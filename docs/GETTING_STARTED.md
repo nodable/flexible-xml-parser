@@ -262,7 +262,7 @@ console.log(result.Envelope.Body.GetPrice.Item);  // "Apple"
 1. **Read the full documentation**: See `DOCUMENTATION.md` for complete API reference
 2. **Check examples**: Look at `test-basic.js` and `test-suite.js` for more examples
 3. **Explore options**: Review all available options in `DOCUMENTATION.md`
-4. **Try different output builders**: Experiment with JsArrBuilder and JsMinArrBuilder
+4. **Try different output builders**: Experiment with NodeTreeBuilder and JsMinArrBuilder
 5. **Create custom value parsers**: Build parsers for your specific data formats
 
 ## Quick Reference

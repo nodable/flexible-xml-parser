@@ -796,7 +796,7 @@ describe("Stop Nodes — skipEnclosures", function () {
     expect(collected[1].content).toBe("body{}");
   });
 
-  it("onStopNode fires before content is added to output tree (JsObjBuilder)", function () {
+  it("onStopNode fires before content is added to output tree (CompactObjBuilder)", function () {
     const order = [];
     const xml = `<root><s>content</s></root>`;
     const parser = new XMLParser({

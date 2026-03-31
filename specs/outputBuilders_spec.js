@@ -1,6 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import JsArrBuilder from "../src/OutputBuilders/JsArrBuilder.js";
-import JsObjOutputBuilder, { JsObjBuilder } from "../src/OutputBuilders/JsObjBuilder.js";
+import NodeTreeBuilder from "../src/OutputBuilders/NodeTreeBuilder.js";
+import JsObjOutputBuilder, { CompactObjBuilder } from "../src/OutputBuilders/CompactObjBuilder.js";
 
 describe("Output Builders", function () {
 
@@ -14,7 +14,7 @@ describe("Output Builders", function () {
       <single>value</single>
     </root>`;
 
-  describe("JsObjBuilder (default)", function () {
+  describe("CompactObjBuilder (default)", function () {
 
     it("should build JavaScript object with arrays for repeated tags", function () {
       const parser = new XMLParser({
@@ -46,11 +46,11 @@ describe("Output Builders", function () {
 
   });
 
-  describe("JsArrBuilder", function () {
+  describe("NodeTreeBuilder", function () {
 
     it("should preserve document order in array format", function () {
       const options = {
-        OutputBuilder: new JsArrBuilder(),
+        OutputBuilder: new NodeTreeBuilder(),
         skip: { attributes: false }
       };
 
@@ -65,7 +65,7 @@ describe("Output Builders", function () {
     it("should handle attributes in array format", function () {
       const xml = `<root attr="value"><tag>content</tag></root>`;
       const options = {
-        OutputBuilder: new JsArrBuilder(),
+        OutputBuilder: new NodeTreeBuilder(),
         skip: { attributes: false }
       };
 
@@ -81,10 +81,10 @@ describe("Output Builders", function () {
   describe("Custom Output Builder", function () {
 
     it("should allow custom output builder implementation via factory pattern", function () {
-      // JsObjBuilder is the internal per-parse instance class.
+      // CompactObjBuilder is the internal per-parse instance class.
       // To provide a custom OutputBuilder to XMLParser you need a factory object
       // with a getInstance() method — exactly as shown in customOutputBuilder_spec.js.
-      class CustomBuilder extends JsObjBuilder {
+      class CustomBuilder extends CompactObjBuilder {
         closeElement(matcher) {
           super.closeElement(matcher);
         }

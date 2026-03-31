@@ -6,13 +6,13 @@
  * through a custom OutputBuilder — without any transformTagName,
  * transformAttributeName, or updateTag options.
  *
- * Every approach shown here subclasses JsObjBuilder (exported from
- * JsObjBuilder.js) and overrides only the method(s) relevant to the
+ * Every approach shown here subclasses CompactObjBuilder (exported from
+ * CompactObjBuilder.js) and overrides only the method(s) relevant to the
  * use case. The rest of the parsing pipeline is unchanged.
  */
 
 import XMLParser from "../src/XMLParser.js";
-import JsObjOutputBuilder, { JsObjBuilder } from "../src/OutputBuilders/JsObjBuilder.js";
+import JsObjOutputBuilder, { CompactObjBuilder } from "../src/OutputBuilders/CompactObjBuilder.js";
 import {
   runAcrossAllInputSources,
   runAcrossAllInputSourcesWithFactory, frunAcrossAllInputSourcesWithFactory
@@ -20,7 +20,7 @@ import {
 import numberParser from "../src/OutputBuilders/ValueParsers/number.js";
 
 // ─── Helper ────────────────────────────────────────────────────────────────
-// Build a custom OutputBuilder factory from a JsObjBuilder subclass.
+// Build a custom OutputBuilder factory from a CompactObjBuilder subclass.
 // The factory wrapper is what XMLParser receives as options.OutputBuilder.
 function makeFactory(BuilderSubclass) {
   return {
@@ -52,7 +52,7 @@ describe("Custom OutputBuilder — tag name transformation", function () {
       expect(result.ROOT).toBeUndefined();
     },
     () => {
-      class LowerCaseTagBuilder extends JsObjBuilder {
+      class LowerCaseTagBuilder extends CompactObjBuilder {
         addElement(tag, matcher) {
           tag = { ...tag, name: tag.name.toLowerCase() };
           super.addElement(tag, matcher);
@@ -70,7 +70,7 @@ describe("Custom OutputBuilder — tag name transformation", function () {
       expect(result.root.oldName).toBeUndefined();
     },
     () => {
-      class RenameBuilder extends JsObjBuilder {
+      class RenameBuilder extends CompactObjBuilder {
         addElement(tag, matcher) {
           tag = { ...tag, name: tag.name === "oldName" ? "newName" : tag.name };
           super.addElement(tag, matcher);
@@ -88,7 +88,7 @@ describe("Custom OutputBuilder — tag name transformation", function () {
       expect(result.root.item).toBe("hello");
     },
     () => {
-      class StripNsBuilder extends JsObjBuilder {
+      class StripNsBuilder extends CompactObjBuilder {
         addElement(tag, matcher) {
           const name = tag.name.includes(":") ? tag.name.split(":")[1] : tag.name;
           super.addElement({ ...tag, name }, matcher);
@@ -115,7 +115,7 @@ describe("Custom OutputBuilder — tag name transformation", function () {
       expect(result.root.secret).toBeUndefined();
     },
     () => {
-      class SkipTagBuilder extends JsObjBuilder {
+      class SkipTagBuilder extends CompactObjBuilder {
         constructor(...args) {
           super(...args);
           this._skipDepth = 0;
@@ -147,7 +147,7 @@ describe("Custom OutputBuilder — tag name transformation", function () {
       expect(result.root.item).toBeUndefined();
     },
     () => {
-      class RenameOnCloseBuilder extends JsObjBuilder {
+      class RenameOnCloseBuilder extends CompactObjBuilder {
         closeElement(matcher) {
           if (this.tagName === "item") {
             this.tagName = "entry";
@@ -175,7 +175,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.root.ID).toBeUndefined();
     },
     () => {
-      class LowerCaseAttrBuilder extends JsObjBuilder {
+      class LowerCaseAttrBuilder extends CompactObjBuilder {
         addAttribute(name, value) {
           super.addAttribute(name.toLowerCase(), value);
         }
@@ -197,7 +197,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.div.class).toBeUndefined();
     },
     () => {
-      class RenameAttrBuilder extends JsObjBuilder {
+      class RenameAttrBuilder extends CompactObjBuilder {
         addAttribute(name, value) {
           super.addAttribute(name === "class" ? "className" : name, value);
         }
@@ -220,7 +220,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.item.debug).toBeUndefined();
     },
     () => {
-      class DropAttrBuilder extends JsObjBuilder {
+      class DropAttrBuilder extends CompactObjBuilder {
         addAttribute(name, value) {
           if (name === "internal" || name === "debug") return; // drop silently
           super.addAttribute(name, value);
@@ -243,7 +243,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.root["xmlns:ns"]).toBeUndefined();
     },
     () => {
-      class DropXmlnsBuilder extends JsObjBuilder {
+      class DropXmlnsBuilder extends CompactObjBuilder {
         addAttribute(name, value) {
           if (name.startsWith("xmlns")) return;
           super.addAttribute(name, value);
@@ -265,7 +265,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.item.type).toBe("PRIMARY");
     },
     () => {
-      class UpperCaseAttrValueBuilder extends JsObjBuilder {
+      class UpperCaseAttrValueBuilder extends CompactObjBuilder {
         addAttribute(name, value) {
           const transformed = typeof value === "string" ? value.toUpperCase() : value;
           super.addAttribute(name, transformed);
@@ -289,7 +289,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
       expect(result.div.tmp).toBeUndefined();
     },
     () => {
-      class NormaliseAttrsBuilder extends JsObjBuilder {
+      class NormaliseAttrsBuilder extends CompactObjBuilder {
         constructor(...args) {
           super(...args);
           this._pendingAttrs = {};
@@ -344,7 +344,7 @@ describe("Custom OutputBuilder — combined tag and attribute transformation", f
       expect(result.root.child["#text"]).toBe("text");
     },
     () => {
-      class LowerCaseAllBuilder extends JsObjBuilder {
+      class LowerCaseAllBuilder extends CompactObjBuilder {
         addElement(tag, matcher) {
           super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
         }
@@ -371,7 +371,7 @@ describe("Custom OutputBuilder — combined tag and attribute transformation", f
       expect(result.root.item.id).toBe(1);
     },
     () => {
-      class TagNameAttrBuilder extends JsObjBuilder {
+      class TagNameAttrBuilder extends CompactObjBuilder {
         addElement(tag, matcher) {
           // Inject before super so it lands in this.attributes
           super.addAttribute("_tag", tag.name);

@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import JsObjOutputBuilder, { JsObjBuilder } from "../src/OutputBuilders/JsObjBuilder.js";
+import JsObjOutputBuilder, { CompactObjBuilder } from "../src/OutputBuilders/CompactObjBuilder.js";
 import { Expression } from "path-expression-matcher";
 import {
   frunAcrossAllInputSources,
@@ -12,7 +12,7 @@ const rootItemExp = new Expression('root.item');
 
 describe("Output Builder Options - forceArray and forceTextNode", function () {
 
-  describe("forceArray option - JsObjBuilder", function () {
+  describe("forceArray option - CompactObjBuilder", function () {
 
     runAcrossAllInputSources(
       "should force single tag into array when forceArray returns true",
@@ -204,7 +204,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("forceTextNode option - JsObjBuilder", function () {
+  describe("forceTextNode option - CompactObjBuilder", function () {
 
     runAcrossAllInputSources(
       "should create text node for leaf tag when forceTextNode is true",
@@ -359,7 +359,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("Combined forceArray and forceTextNode - JsObjBuilder", function () {
+  describe("Combined forceArray and forceTextNode - CompactObjBuilder", function () {
 
     runAcrossAllInputSources(
       "should work together - force array and text node",
@@ -510,7 +510,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("alwaysArray option - JsObjBuilder", function () {
+  describe("alwaysArray option - CompactObjBuilder", function () {
 
     runAcrossAllInputSources(
       "should force single tag into array using string name",

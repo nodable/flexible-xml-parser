@@ -479,11 +479,11 @@ export interface X2jOptions {
   feedable?: FeedableOptions;
 
   // --- output builder ---
-  /** Pluggable output builder instance. Default: JsObjBuilder */
+  /** Pluggable output builder instance. Default: CompactObjBuilder */
   OutputBuilder?: OutputBuilderFactory | null;
 
   /**
-   * Callback fired by `JsArrBuilder` and `JsObjBuilder` whenever a stop node
+   * Callback fired by `NodeTreeBuilder` and `CompactObjBuilder` whenever a stop node
    * is fully collected, before the raw content is added to the output tree.
    *
    * Receive the tag detail, the raw unparsed content, and a read-only path
@@ -538,7 +538,7 @@ export interface OutputBuilderInstance {
   /**
    * Optional hook called by the parser when a stop node is fully collected.
    * Implement this in custom OutputBuilder classes to handle stop-node content.
-   * `JsArrBuilder` and `JsObjBuilder` implement it and delegate to the
+   * `NodeTreeBuilder` and `CompactObjBuilder` implement it and delegate to the
    * `options.onStopNode` callback when supplied.
    */
   onStopNode?(
@@ -612,7 +612,7 @@ export default class XMLParser {
 
 export { XMLParser };
 
-export class JsObjBuilder implements OutputBuilderFactory {
+export class CompactObjBuilder implements OutputBuilderFactory {
   constructor(options?: Partial<X2jOptions>);
   getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
   registerValueParser(name: string, parser: ValueParser): void;

@@ -62,9 +62,9 @@ attribute values — through the `tags.valueParsers` and `attributes.valueParser
 options on the **output builder**, not on `XMLParser`.
 
 ```js
-import { XMLParser, JsObjBuilder } from 'flex-xml-parser';
+import { XMLParser, CompactObjBuilder } from 'flex-xml-parser';
 
-const builder = new JsObjBuilder({
+const builder = new CompactObjBuilder({
   tags: {
     valueParsers: ['entity', 'boolean', 'number'],  // default
   },
@@ -85,7 +85,7 @@ Each entry can be:
 To **disable all value transformation** pass an empty array:
 
 ```js
-const builder = new JsObjBuilder({
+const builder = new CompactObjBuilder({
   tags: { valueParsers: [] },
   attributes: { valueParsers: [] },
 });
@@ -107,14 +107,14 @@ Which sources are active is controlled by the `EntitiesValueParser` instance
 registered under the `'entity'` key on the output builder:
 
 ```js
-import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({
   default: true,   // built-in XML entities (default: true)
   html: false,     // HTML named entities  (default: false)
   external: true,  // evp.addEntity()      (default: true)
 });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
@@ -130,7 +130,7 @@ Remove `'entity'` from the chain to leave all entity references
 unexpanded without touching any other option:
 
 ```js
-const builder = new JsObjBuilder({
+const builder = new CompactObjBuilder({
   tags: { valueParsers: ['boolean', 'number'] },
 });
 const parser = new XMLParser({ OutputBuilder: builder });
@@ -181,9 +181,9 @@ To customise number parsing, instantiate `numberParser` directly and register it
 on the output builder:
 
 ```js
-import { numberParser, JsObjBuilder } from 'flex-xml-parser';
+import { numberParser, CompactObjBuilder } from 'flex-xml-parser';
 
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser('number', new numberParser({
   hex:          true,
   leadingZeros: false,  // "007" stays as "007"
@@ -376,7 +376,7 @@ To reference a custom parser by name (like the built-ins), register it on the
 
 ```js
 import XMLParser from 'flex-xml-parser';
-import JsObjOutputBuilder from 'flex-xml-parser/src/OutputBuilders/JsObjBuilder.js';
+import JsObjOutputBuilder from 'flex-xml-parser/src/OutputBuilders/CompactObjBuilder.js';
 
 class SlugParser {
   parse(val) {

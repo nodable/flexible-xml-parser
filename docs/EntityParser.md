@@ -13,7 +13,7 @@ category 2: user defined
 const evp = new EntitiesValueParser({
   docType: true
 });
-const builder = new JsObjBuilder();
+const builder = new CompactObjBuilder();
 builder.registerValueParser("entity", evp);
 
 const parser = new XMLParser({

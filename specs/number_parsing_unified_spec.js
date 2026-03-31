@@ -1,10 +1,10 @@
 import XMLParser from "../src/XMLParser.js";
-import { numberParser, JsObjBuilder } from "../src/fxp.js";
+import { numberParser, CompactObjBuilder } from "../src/fxp.js";
 import { runAcrossAllInputSources, createInputSource, describeAcrossAllInputSources } from "./helpers/testRunner.js";
 
 // Helper: build a parser with a custom numberParser configuration.
 const makeParser = (numOpts = {}, parserOpts = {}) => {
-  const builder = new JsObjBuilder();
+  const builder = new CompactObjBuilder();
   builder.registerValueParser("number", new numberParser(numOpts));
   return new XMLParser({ ...parserOpts, OutputBuilder: builder });
 };
@@ -181,7 +181,7 @@ describeAcrossAllInputSources("Advanced Number Parsing Scenarios", function (par
 
     // describeAcrossAllInputSources uses XMLParser directly via parse(), so we
     // can't inject a custom builder. Create a parser manually for this test.
-    const builder = new JsObjBuilder();
+    const builder = new CompactObjBuilder();
     builder.registerValueParser("number", new numberParser({ hex: true }));
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = createInputSource(xml, inputType).parse(parser);

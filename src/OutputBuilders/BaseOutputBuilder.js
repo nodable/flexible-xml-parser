@@ -132,8 +132,8 @@ export default class BaseOutputBuilder {
    * Handle XML declaration (<?xml ... ?>).
    * Dropped when skip.declaration is true.
    */
-  addDeclaration() {
-    this.addInstruction("?xml");
+  addDeclaration(name) {
+    this.addInstruction(name);
   }
 
   /**
