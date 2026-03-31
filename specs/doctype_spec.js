@@ -24,7 +24,7 @@ const withDocType = (entities, body) => {
 const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}) => {
   const evp = new EntitiesValueParser({ default: true, ...entitiesOpts });
   const builder = new JsObjBuilder();
-  builder.registerValueParser("replaceEntities", evp);
+  builder.registerValueParser("entity", evp);
   return new XMLParser({
     ...parserOpts,
     doctypeOptions: { enabled: false, ...doctypeOpts },
@@ -162,7 +162,7 @@ describe("DOCTYPE — replaceEntities value parser gate", function () {
       expect(result.root).toBe("&greeting;");
     },
     () => {
-      // No EntitiesValueParser registered; chain has no 'replaceEntities'
+      // No EntitiesValueParser registered; chain has no 'entity'
       const builder = new JsObjBuilder({ tags: { valueParsers: ["boolean", "number"] } });
       return new XMLParser({
         doctypeOptions: { enabled: true },
@@ -303,7 +303,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     const evp = new EntitiesValueParser({ default: true });
     evp.addEntity("copy", "©");
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
     expect(result.root).toBe("©");
@@ -314,7 +314,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     evp.addEntity("copy", "©");
     evp.addEntity("trade", "™");
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy; &trade;</root>");
     expect(result.root).toBe("© ™");
@@ -325,7 +325,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     const evp = new EntitiesValueParser({ default: true, external: false });
     evp.addEntity("copy", "©");
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
     expect(result.root).toBe("&copy;");
@@ -335,14 +335,14 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     const evpOff = new EntitiesValueParser({ default: true, external: false });
     evpOff.addEntity("copy", "©");
     const builderOff = new JsObjBuilder();
-    builderOff.registerValueParser("replaceEntities", evpOff);
+    builderOff.registerValueParser("entity", evpOff);
     const parserOff = new XMLParser({ OutputBuilder: builderOff });
     expect(parserOff.parse("<root>&copy;</root>").root).toBe("&copy;");
 
     const evpOn = new EntitiesValueParser({ default: true, external: true });
     evpOn.addEntity("copy", "©");
     const builderOn = new JsObjBuilder();
-    builderOn.registerValueParser("replaceEntities", evpOn);
+    builderOn.registerValueParser("entity", evpOn);
     const parserOn = new XMLParser({ OutputBuilder: builderOn });
     expect(parserOn.parse("<root>&copy;</root>").root).toBe("©");
   });
@@ -366,7 +366,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     const evp = new EntitiesValueParser({ default: true });
     evp.addEntity("ext", "external");
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
       OutputBuilder: builder,
@@ -504,7 +504,7 @@ describe("Security — maxTotalExpansions", function () {
     const evp = new EntitiesValueParser({ default: true, external: true, maxTotalExpansions: 2 });
     evp.addEntity("e", "x");
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     expect(() => parser.parse("<root>&e;&e;&e;</root>")).toThrowError(
       "Entity expansion limit exceeded: 3 > 2"
@@ -561,7 +561,7 @@ describe("Security — Billion Laughs mitigation", function () {
   it("entity values containing '&' are silently discarded (no recursive expansion)", function () {
     const evp = new EntitiesValueParser({ default: true });
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
       OutputBuilder: builder,
@@ -579,7 +579,7 @@ describe("Security — Billion Laughs mitigation", function () {
   it("flat repetition attack is caught by maxTotalExpansions", function () {
     const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 100 });
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
       OutputBuilder: builder,
@@ -600,7 +600,7 @@ describe("Per-parse isolation", function () {
   it("expansion counters reset between parses — second parse should not carry over", function () {
     const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 5 });
     const builder = new JsObjBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
       OutputBuilder: builder,

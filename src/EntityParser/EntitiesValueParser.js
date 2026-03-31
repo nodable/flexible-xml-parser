@@ -4,11 +4,11 @@ import { ParseError, ErrorCode } from '../ParseError.js';
 /**
  * EntitiesValueParser — value parser that expands entity references.
  *
- * Register an instance under the key 'replaceEntities' on an output builder
+ * Register an instance under the key 'entity' on an output builder
  * to enable entity expansion:
  *
  *   const evp = new EntitiesValueParser({ default: true, html: false });
- *   myBuilder.registerValueParser('replaceEntities', evp);
+ *   myBuilder.registerValueParser('entity', evp);
  *
  * External (custom) entities are registered directly on this instance:
  *

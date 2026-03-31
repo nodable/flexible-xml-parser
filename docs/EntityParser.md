@@ -14,7 +14,7 @@ const evp = new EntitiesValueParser({
   docType: true
 });
 const builder = new JsObjBuilder();
-builder.registerValueParser("replaceEntities", evp);
+builder.registerValueParser("entity", evp);
 
 const parser = new XMLParser({
   doctypeOptions: { enabled: true },

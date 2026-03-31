@@ -71,18 +71,18 @@ describe("Value Parsers", function () {
 
   // ── Entity expansion via ValueParser ─────────────────────────────────────
 
-  it("should expand XML entities via the 'replaceEntities' ValueParser (default)", function () {
+  it("should expand XML entities via the 'entity' ValueParser (default)", function () {
     const parser = new XMLParser();
     const result = parser.parse(`<root><tag>&lt;hello&gt;</tag></root>`);
     expect(result.root.tag).toBe("<hello>");
   });
 
-  it("should expand DOCTYPE entities via the 'replaceEntities' ValueParser (default)", function () {
+  it("should expand DOCTYPE entities via the 'entity' ValueParser (default)", function () {
     const evp = new EntitiesValueParser({
       docType: true
     });
     const builder = new JsObjOutputBuilder();
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
 
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
@@ -94,7 +94,7 @@ describe("Value Parsers", function () {
     expect(result.root.name).toBe("FlexParser");
   });
 
-  it("should leave entities unexpanded when 'replaceEntities' is removed from valueParsers", function () {
+  it("should leave entities unexpanded when 'entity' is removed from valueParsers", function () {
     const parser = new XMLParser({
       tags: { valueParsers: ['boolean', 'number'] },
     });
@@ -105,12 +105,12 @@ describe("Value Parsers", function () {
   it("should expand HTML entities when entityParseOptions.html is true", function () {
     const evp = new EntitiesValueParser({ html: true });
     const builder = new JsObjOutputBuilder({
-      // attributes: { valueParsers: ['replaceEntities'] }
+      // attributes: { valueParsers: ['entity'] }
       tags: { valueParsers: [evp, "number"] }
-      // tags: { valueParsers: ["replaceEntities", "number"] }
+      // tags: { valueParsers: ["entity", "number"] }
     });
 
-    builder.registerValueParser("replaceEntities", evp);
+    builder.registerValueParser("entity", evp);
 
     const parser = new XMLParser({
       skip: { attributes: false },
@@ -127,11 +127,11 @@ describe("Value Parsers", function () {
       html: true
     });
     const builder = new JsObjOutputBuilder({
-      // attributes: { valueParsers: ['replaceEntities'] }
+      // attributes: { valueParsers: ['entity'] }
       attributes: { valueParsers: [evp] }
     });
 
-    // builder.registerValueParser("replaceEntities", evp);
+    // builder.registerValueParser("entity", evp);
 
     const parser = new XMLParser({
       skip: { attributes: false },
@@ -152,7 +152,7 @@ describe("Value Parsers", function () {
       </root>`;
 
     const parser = new XMLParser({
-      tags: { valueParsers: ['replaceEntities', 'boolean', 'number'] },
+      tags: { valueParsers: ['entity', 'boolean', 'number'] },
     });
     const result = parser.parse(xmlData);
 

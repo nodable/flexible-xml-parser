@@ -78,7 +78,7 @@ XML input
       → DocTypeReader  (always reads DOCTYPE to advance cursor;
                         forwards entities to OutputBuilder only when doctypeOptions.enabled: true)
           → OutputBuilder  (assemble JS structure)
-              → ValueParsers  ('replaceEntities' expands refs, 'boolean'/'number' coerce types)
+              → ValueParsers  ('entity' expands refs, 'boolean'/'number' coerce types)
                   → result
 ```
 
@@ -87,10 +87,10 @@ XML input
 Entity replacement is controlled by two completely independent settings:
 
 ```
-DOCTYPE block → [doctypeOptions.enabled gate] → outputBuilder.addDocTypeEntities() → ['replaceEntities' gate] → replacement in values
+DOCTYPE block → [doctypeOptions.enabled gate] → outputBuilder.addDocTypeEntities() → ['entity' gate] → replacement in values
 ```
 
-| `doctypeOptions.enabled` | `'replaceEntities'` in valueParsers | Result |
+| `doctypeOptions.enabled` | `'entity'` in valueParsers | Result |
 |---|---|---|
 | `false` (default) | yes (default) | DOCTYPE entities discarded; built-in XML entities still replaced |
 | `true` | yes | DOCTYPE entities collected AND replaced |
@@ -291,7 +291,7 @@ doctypeOptions: {
                           //   false (default) → DOCTYPE is read (cursor advances) but
                           //                     entities are discarded
                           //   true            → entities collected and forwarded
-                          //   Note: 'replaceEntities' must also be in the output
+                          //   Note: 'entity' must also be in the output
                           //         builder's valueParsers chain for replacement to happen
 
   // ── Read-time limits (enforced by DocTypeReader at declaration time) ──────
@@ -348,7 +348,7 @@ const evp = new EntitiesValueParser({
 });
 
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 const parser = new XMLParser({ OutputBuilder: builder });
 ```
 
@@ -361,7 +361,7 @@ const evp = new EntitiesValueParser({ default: true });
 evp.addEntity('copy', '©');
 evp.addEntity('trade', '™');
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 const parser = new XMLParser({ OutputBuilder: builder });
 parser.parse('<root>&copy; &trade;</root>');  // { root: '© ™' }
 ```
@@ -406,8 +406,8 @@ Value parsers transform string values in sequence. Each receives the output of t
 The default chains are set by the output builder (`JsObjBuilder`, `JsArrBuilder`, etc.):
 
 ```
-tags.valueParsers:       ['replaceEntities', 'boolean', 'number']
-attributes.valueParsers: ['replaceEntities', 'number',  'boolean']
+tags.valueParsers:       ['entity', 'boolean', 'number']
+attributes.valueParsers: ['entity', 'number',  'boolean']
 ```
 
 These can be overridden per output builder instance. No `'trim'` by default — the parser
@@ -417,7 +417,7 @@ faithfully preserves whitespace. Add `'trim'` explicitly if needed.
 
 | Name | What it does |
 |------|-------------|
-| `'replaceEntities'` | Expands entity references. Configured via `EntitiesValueParser` options (DOCTYPE, external, built-in XML, HTML) |
+| `'entity'` | Expands entity references. Configured via `EntitiesValueParser` options (DOCTYPE, external, built-in XML, HTML) |
 | `'boolean'` | `"true"` → `true`, `"false"` → `false` |
 | `'number'` | Parses numeric strings to JS numbers (configurable by registering a custom `numberParser` instance) |
 | `'trim'` | Strips leading/trailing whitespace from strings |
@@ -426,7 +426,7 @@ faithfully preserves whitespace. Add `'trim'` explicitly if needed.
 ### Controlling entity replacement
 
 ```javascript
-// Disable entity replacement entirely — remove 'replaceEntities' from chain
+// Disable entity replacement entirely — remove 'entity' from chain
 const builder = new JsObjBuilder({
   tags:       { valueParsers: ['boolean', 'number'] },
   attributes: { valueParsers: ['number', 'boolean'] },
@@ -443,11 +443,11 @@ const builder2 = new JsObjBuilder({
 import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
 const evp = new EntitiesValueParser({ default: true, html: true });
 const builder3 = new JsObjBuilder();
-builder3.registerValueParser('replaceEntities', evp);
+builder3.registerValueParser('entity', evp);
 
 // Add trimming before entity expansion
 const builder4 = new JsObjBuilder({
-  tags: { valueParsers: ['trim', 'replaceEntities', 'boolean', 'number'] },
+  tags: { valueParsers: ['trim', 'entity', 'boolean', 'number'] },
 });
 ```
 
@@ -476,7 +476,7 @@ class PriceParser {
 }
 
 const parser = new XMLParser({
-  tags: { valueParsers: ['replaceEntities', new PriceParser(), 'boolean', 'number'] },
+  tags: { valueParsers: ['entity', new PriceParser(), 'boolean', 'number'] },
 });
 ```
 
@@ -510,7 +510,7 @@ builder.registerValueParser('price', new PriceParser());
 
 const parser = new XMLParser({
   OutputBuilder: builder,
-  tags: { valueParsers: ['replaceEntities', 'price', 'boolean', 'number'] },
+  tags: { valueParsers: ['entity', 'price', 'boolean', 'number'] },
 });
 ```
 
@@ -639,7 +639,7 @@ import { XMLParser, EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
 
 const evp = new EntitiesValueParser({ default: true });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   doctypeOptions: { enabled: true },
@@ -664,7 +664,7 @@ const result = parser.parse(`
 const evp = new EntitiesValueParser({ default: true });
 evp.addEntity('copy', '©');
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   doctypeOptions: { enabled: true },
@@ -682,7 +682,7 @@ const result = parser.parse(`
 ```javascript
 const evp = new EntitiesValueParser({ default: true, html: true });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({ OutputBuilder: builder });
 const result = parser.parse('<root><copy>&copy; 2024</copy></root>');
@@ -751,7 +751,7 @@ parser.parse('<content>text</content>');
 
 ### Entity expansion security
 
-**Disable all entity replacement** by removing `'replaceEntities'` from the output builder's chain:
+**Disable all entity replacement** by removing `'entity'` from the output builder's chain:
 
 ```javascript
 const builder = new JsObjBuilder({
@@ -779,7 +779,7 @@ const evp = new EntitiesValueParser({
   maxExpandedLength:  5000,
 });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   doctypeOptions: {

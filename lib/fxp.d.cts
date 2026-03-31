@@ -56,8 +56,8 @@ interface AttributeOptions {
   suffix?: string;
   /**
    * Value parser chain for attribute values.
-   * Built-in names: 'replaceEntities', 'number', 'boolean', 'trim', 'currency'.
-   * Default: ['replaceEntities', 'number', 'boolean']
+   * Built-in names: 'entity', 'number', 'boolean', 'trim', 'currency'.
+   * Default: ['entity', 'number', 'boolean']
    */
   valueParsers?: Array<string | ValueParser>;
 }
@@ -134,8 +134,8 @@ interface TagOptions {
   stopNodes?: Array<string | StopNodeEntry>;
   /**
    * Value parser chain for tag text content.
-   * Built-in names: 'replaceEntities', 'boolean', 'number', 'trim', 'currency'.
-   * Default: ['replaceEntities', 'boolean', 'number']
+   * Built-in names: 'entity', 'boolean', 'number', 'trim', 'currency'.
+   * Default: ['entity', 'boolean', 'number']
    * Add 'trim' to strip leading/trailing whitespace (not done by default).
    */
   valueParsers?: Array<string | ValueParser>;
@@ -177,7 +177,7 @@ interface EntityParseOptions {
   /**
    * Whether entities declared in a DOCTYPE internal subset are collected and applied.
    * The DOCTYPE block is always read to consume it; this flag controls entity storage.
-   * Also requires 'replaceEntities' in valueParsers for replacement to happen.
+   * Also requires 'entity' in valueParsers for replacement to happen.
    *   false / null (default) → entities discarded
    *   true                   → entities collected and applied during replacement
    */
@@ -435,7 +435,7 @@ interface X2jOptions {
   // --- entity parsing ---
   /**
    * Controls which entity sources are active and security limits.
-   * Entity replacement only happens when 'replaceEntities' is in the valueParsers chain.
+   * Entity replacement only happens when 'entity' is in the valueParsers chain.
    */
   entityParseOptions?: EntityParseOptions;
 
@@ -681,7 +681,7 @@ declare function joinParser(val: any[], by?: string): string | any[];
 
 /**
  * Built-in `replaceEntities` value parser class.
- * Registered automatically under the key `'replaceEntities'` in every
+ * Registered automatically under the key `'entity'` in every
  * OutputBuilder's `registeredValParsers` map.
  *
  * Import this type when you need to reference or subclass the parser directly.

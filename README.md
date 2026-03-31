@@ -83,14 +83,14 @@ new XMLParser({
     suffix:       '',
     groupBy:      '',     // group all attributes under this key; '' = inline
     booleanType:  false,  // allow valueless attributes (treated as true)
-    valueParsers: ['replaceEntities', 'number', 'boolean'],
+    valueParsers: ['entity', 'number', 'boolean'],
   },
 
   // Tag value options
   tags: {
     unpaired:     [],     // self-closing tags without / (e.g. ['br', 'img'])
     stopNodes:    [],     // paths whose content is captured raw (see below)
-    valueParsers: ['replaceEntities', 'number', 'boolean'],
+    valueParsers: ['entity', 'number', 'boolean'],
   },
 
   numberParseOptions: { hex: true, leadingZeros: true, eNotation: true },
@@ -123,7 +123,7 @@ new XMLParser({
 
 ## Value parsers
 
-Built-in chain names: `'replaceEntities'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
+Built-in chain names: `'entity'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
 
 ```javascript
 // Disable entity expansion
@@ -131,7 +131,7 @@ new XMLParser({ tags: { valueParsers: ['number', 'boolean'] } });
 
 // HTML entities + trim whitespace
 new XMLParser({
-  tags: { valueParsers: ['replaceEntities', 'trim', 'number', 'boolean'] },
+  tags: { valueParsers: ['entity', 'trim', 'number', 'boolean'] },
   entityParseOptions: { html: true },
 });
 
@@ -149,7 +149,7 @@ class PriceParser {
 }
 
 new XMLParser({
-  tags: { valueParsers: ['replaceEntities', new PriceParser(), 'boolean'] },
+  tags: { valueParsers: ['entity', new PriceParser(), 'boolean'] },
 });
 ```
 
@@ -162,7 +162,7 @@ const builder = new JsObjBuilder();
 builder.registerValueParser('price', new PriceParser());
 
 new XMLParser({
-  tags:          { valueParsers: ['replaceEntities', 'price', 'boolean'] },
+  tags:          { valueParsers: ['entity', 'price', 'boolean'] },
   OutputBuilder: builder,
 });
 ```
@@ -272,7 +272,7 @@ import XMLParser, { X2jOptions, JsObjBuilder, BaseOutputBuilder, ElementType } f
 const options: X2jOptions = {
   skip:    { attributes: false, nsPrefix: true },
   nameFor: { cdata: '#cdata' },
-  tags:    { valueParsers: ['replaceEntities', 'trim', 'number', 'boolean'] },
+  tags:    { valueParsers: ['entity', 'trim', 'number', 'boolean'] },
   limits:  { maxNestedTags: 100 },
 };
 

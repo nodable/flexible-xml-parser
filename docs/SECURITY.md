@@ -201,7 +201,7 @@ const evp = new EntitiesValueParser({
   maxExpandedLength:  10000,
 });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   doctypeOptions: {
@@ -252,7 +252,7 @@ const evp = new EntitiesValueParser({
   maxExpandedLength:  50000,
 });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   // ── Structural limits ────────────────────────────────

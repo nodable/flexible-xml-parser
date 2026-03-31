@@ -53,8 +53,8 @@ export interface AttributeOptions {
   suffix?: string;
   /**
    * Value parser chain for attribute values.
-   * Built-in names: 'replaceEntities', 'number', 'boolean', 'trim', 'currency'.
-   * Default: ['replaceEntities', 'number', 'boolean']
+   * Built-in names: 'entity', 'number', 'boolean', 'trim', 'currency'.
+   * Default: ['entity', 'number', 'boolean']
    */
   valueParsers?: Array<string | ValueParser>;
 }
@@ -131,8 +131,8 @@ export interface TagOptions {
   stopNodes?: Array<string | StopNodeEntry>;
   /**
    * Value parser chain for tag text content.
-   * Built-in names: 'replaceEntities', 'boolean', 'number', 'trim', 'currency'.
-   * Default: ['replaceEntities', 'boolean', 'number']
+   * Built-in names: 'entity', 'boolean', 'number', 'trim', 'currency'.
+   * Default: ['entity', 'boolean', 'number']
    * Add 'trim' to strip leading/trailing whitespace (not done by default).
    */
   valueParsers?: Array<string | ValueParser>;
@@ -157,7 +157,7 @@ export interface DoctypeOptions {
    * Whether to collect entities declared in the DOCTYPE internal subset and
    * forward them to the output builder for replacement.
    * The DOCTYPE block is always read to consume it; this flag controls forwarding.
-   * Also requires 'replaceEntities' in the output builder's valueParsers chain.
+   * Also requires 'entity' in the output builder's valueParsers chain.
    *   false (default) → entities discarded
    *   true            → entities collected and forwarded to the output builder
    */
@@ -706,10 +706,10 @@ export declare class EntitiesParser {
 /**
  * Value parser that expands entity references in tag text and attribute values.
  *
- * Register an instance under 'replaceEntities' on an output builder:
+ * Register an instance under 'entity' on an output builder:
  * ```ts
  * const evp = new EntitiesValueParser({ default: true, html: false });
- * myBuilder.registerValueParser('replaceEntities', evp);
+ * myBuilder.registerValueParser('entity', evp);
  * ```
  *
  * External entities are registered directly on the instance:

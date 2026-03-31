@@ -59,7 +59,7 @@ export const defaultOptions = {
   //                                        are discarded and never forwarded to output builders
   //                     true → collect DOCTYPE entities and forward them to the output builder
   //                     Note: the output builder must have an EntitiesValueParser registered
-  //                     under 'replaceEntities' and 'replaceEntities' must be in its
+  //                     under 'entity' and 'entity' must be in its
   //                     valueParsers chain for replacement to actually happen.
   //
   // Read-time security limits (enforced by DocTypeReader at declaration time):

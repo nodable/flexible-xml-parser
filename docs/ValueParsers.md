@@ -66,10 +66,10 @@ import { XMLParser, JsObjBuilder } from 'flex-xml-parser';
 
 const builder = new JsObjBuilder({
   tags: {
-    valueParsers: ['replaceEntities', 'boolean', 'number'],  // default
+    valueParsers: ['entity', 'boolean', 'number'],  // default
   },
   attributes: {
-    valueParsers: ['replaceEntities', 'number', 'boolean'],  // default
+    valueParsers: ['entity', 'number', 'boolean'],  // default
   },
 });
 const parser = new XMLParser({ OutputBuilder: builder });
@@ -104,7 +104,7 @@ optional HTML named entities (`&nbsp;`, `&copy;`, etc.), DOCTYPE-declared
 entities, and any entities registered via `EntitiesValueParser.addEntity()`.
 
 Which sources are active is controlled by the `EntitiesValueParser` instance
-registered under the `'replaceEntities'` key on the output builder:
+registered under the `'entity'` key on the output builder:
 
 ```js
 import { EntitiesValueParser, JsObjBuilder } from 'flex-xml-parser';
@@ -115,7 +115,7 @@ const evp = new EntitiesValueParser({
   external: true,  // evp.addEntity()      (default: true)
 });
 const builder = new JsObjBuilder();
-builder.registerValueParser('replaceEntities', evp);
+builder.registerValueParser('entity', evp);
 
 const parser = new XMLParser({
   doctypeOptions: { enabled: false }, // DOCTYPE entities (default: false)
@@ -126,7 +126,7 @@ const parser = new XMLParser({
 DOCTYPE entity collection is controlled separately by `doctypeOptions.enabled` on
 `XMLParser`, since it happens at read time before value parsing runs.
 
-Remove `'replaceEntities'` from the chain to leave all entity references
+Remove `'entity'` from the chain to leave all entity references
 unexpanded without touching any other option:
 
 ```js
@@ -205,7 +205,7 @@ pipeline — add it explicitly when needed:
 
 ```js
 const parser = new XMLParser({
-  tags: { valueParsers: ['trim', 'replaceEntities', 'boolean', 'number'] },
+  tags: { valueParsers: ['trim', 'entity', 'boolean', 'number'] },
 });
 
 const result = parser.parse(`<root><tag>  hello  </tag></root>`);
@@ -227,7 +227,7 @@ import CurrencyParser from 'flex-xml-parser/src/ValueParsers/currency.js';
 
 const parser = new XMLParser({
   tags: {
-    valueParsers: ['replaceEntities', new CurrencyParser(), 'boolean', 'number'],
+    valueParsers: ['entity', new CurrencyParser(), 'boolean', 'number'],
   },
 });
 ```
@@ -258,7 +258,7 @@ const yesNo = new boolParser(
 );
 
 const parser = new XMLParser({
-  tags: { valueParsers: ['replaceEntities', yesNo, 'number'] },
+  tags: { valueParsers: ['entity', yesNo, 'number'] },
 });
 
 const result = parser.parse(`<root><a>yes</a><b>no</b><c>1</c></root>`);
@@ -275,7 +275,7 @@ import numParser from 'flex-xml-parser/src/ValueParsers/number.js';
 const strictNum = new numParser({ hex: false, leadingZeros: false, eNotation: true });
 
 const parser = new XMLParser({
-  tags: { valueParsers: ['replaceEntities', 'boolean', strictNum] },
+  tags: { valueParsers: ['entity', 'boolean', strictNum] },
 });
 
 const result = parser.parse(`<root><id>007</id><val>0xFF</val><sci>1.5e3</sci></root>`);
@@ -302,7 +302,7 @@ class UpperCaseParser {
 }
 
 const parser = new XMLParser({
-  tags: { valueParsers: ['replaceEntities', new UpperCaseParser(), 'boolean', 'number'] },
+  tags: { valueParsers: ['entity', new UpperCaseParser(), 'boolean', 'number'] },
 });
 
 const result = parser.parse(`<root><name>alice</name></root>`);
@@ -325,7 +325,7 @@ class AuditCollector {
 const auditor = new AuditCollector();
 
 const parser = new XMLParser({
-  tags: { valueParsers: ['replaceEntities', auditor, 'boolean', 'number'] },
+  tags: { valueParsers: ['entity', auditor, 'boolean', 'number'] },
 });
 
 parser.parse(`<order><id>42</id><total>99.99</total></order>`);
@@ -354,7 +354,7 @@ class SelectiveNumParser {
 const parser = new XMLParser({
   tags: {
     valueParsers: [
-      'replaceEntities',
+      'entity',
       'boolean',
       new SelectiveNumParser(['price', 'qty', 'id']),
     ],
@@ -391,7 +391,7 @@ builder.registerValueParser('slug', new SlugParser());
 
 const parser = new XMLParser({
   OutputBuilder: builder,
-  tags: { valueParsers: ['replaceEntities', 'slug'] },  // use by name
+  tags: { valueParsers: ['entity', 'slug'] },  // use by name
 });
 
 const result = parser.parse(`<root><title>Hello World</title></root>`);
@@ -484,10 +484,10 @@ previous one, not the original raw string. This means:
 
 ```js
 // Recommended default order
-['replaceEntities', 'trim', 'boolean', 'number']
+['entity', 'trim', 'boolean', 'number']
 
 // If trim is not needed (default):
-['replaceEntities', 'boolean', 'number']
+['entity', 'boolean', 'number']
 ```
 
 ---
@@ -502,11 +502,11 @@ const parser = new XMLParser({
   skip: { attributes: false },
   tags: {
     // Full pipeline for tag text
-    valueParsers: ['replaceEntities', 'trim', 'boolean', 'number'],
+    valueParsers: ['entity', 'trim', 'boolean', 'number'],
   },
   attributes: {
     // Attributes: entities + numbers only; booleans stay as strings
-    valueParsers: ['replaceEntities', 'number'],
+    valueParsers: ['entity', 'number'],
     prefix: '@_',
   },
 });
@@ -518,7 +518,7 @@ const parser = new XMLParser({
 
 | Name | Registered as | Input → Output | Notes |
 |---|---|---|---|
-| Entity replacement | `'replaceEntities'` | `"&lt;"` → `"<"` | Configured via `EntitiesValueParser` options |
+| Entity replacement | `'entity'` | `"&lt;"` → `"<"` | Configured via `EntitiesValueParser` options |
 | Boolean conversion | `'boolean'` | `"true"` → `true` | Customisable true/false lists |
 | Number conversion | `'number'` | `"42"` → `42` | Configure by registering a custom `numberParser` instance |
 | Whitespace trim | `'trim'` | `"  hi  "` → `"hi"` | Not in default chain |
