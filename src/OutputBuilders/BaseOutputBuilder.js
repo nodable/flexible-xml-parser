@@ -5,7 +5,7 @@
  * @enum {string}
  */
 export const ElementType = Object.freeze({
-  TAG: 'TAG',
+  ELEMENT: 'ELEMENT',
   ATTRIBUTE: 'ATTRIBUTE',
 });
 
@@ -16,7 +16,7 @@ export default class BaseOutputBuilder {
   }
 
   /**
-   * Add a parsed attribute to the current tag.
+   * Add a parsed attribute to the current element.
    * Only called when skip.attributes is false.
    *
    * @param {string}  name    - processed attribute name (prefix stripped, sanitised)
@@ -42,9 +42,9 @@ export default class BaseOutputBuilder {
    * Each parser receives `(currentValue, context)` where context is:
    * ```
    * {
-   *   elementName:  string,           // tag name or attribute name
+   *   elementName:  string,           // element name or attribute name
    *   elementValue: any,              // original value before this parse call
-   *   elementType:  'TAG'|'ATTRIBUTE',
+   *   elementType:  'ELEMENT'|'ATTRIBUTE',
    *   matcher:      ReadOnlyMatcher,  // inspect path, attributes, position
    *   isLeafNode:   boolean|null,     // null when not yet determinable
    * }
@@ -85,9 +85,9 @@ export default class BaseOutputBuilder {
   /**
    * Add a CDATA section.
    * - Dropped entirely when skip.cdata is true.
-   * - Stored under nameFor.cdata when set; '' = merge into tag text value.
+   * - Stored under nameFor.cdata when set; '' = merge into element text value.
    */
-  addCdata(text) {
+  addLiteral(text) {
     if (this.options.skip.cdata) return;
     if (this.options.nameFor.cdata) {
       this._addChild(this.options.nameFor.cdata, text);
@@ -97,8 +97,8 @@ export default class BaseOutputBuilder {
   }
 
   /**
-   * Add raw text directly to the current tag's text value, bypassing any
-   * value-parser chain. Used by addCdata() when CDATA merges into tag text.
+   * Add raw text directly to the current element's text value, bypassing any
+   * value-parser chain. Used by addLiteral() when CDATA merges into element text.
    * Subclasses that override addValue() will have that override respected here
    * because this is a regular prototype method, not an arrow function.
    */
@@ -112,7 +112,7 @@ export default class BaseOutputBuilder {
    *
    * Called once per parse by Xml2JsParser immediately after the DOCTYPE block
    * is read. The default implementation is intentionally generic — it forwards
-   * to every registered value parser that exposes an addDocTypeEntities()
+   * to every registered value parser that exposes an addInputEntities()
    * method, without coupling BaseOutputBuilder to any specific parser type.
    *
    * Subclasses may override this if they need different routing behaviour,
@@ -120,10 +120,10 @@ export default class BaseOutputBuilder {
    *
    * @param {object} entities — raw entity map from DocTypeReader
    */
-  addDocTypeEntities(entities) {
+  addInputEntities(entities) {
     for (const vp of Object.values(this.registeredValParsers)) {
-      if (typeof vp.addDocTypeEntities === 'function') {
-        vp.addDocTypeEntities(entities);
+      if (typeof vp.addInputEntities === 'function') {
+        vp.addInputEntities(entities);
       }
     }
   }
@@ -133,13 +133,13 @@ export default class BaseOutputBuilder {
    * Dropped when skip.declaration is true.
    */
   addDeclaration() {
-    this.addPi("?xml");
+    this.addInstruction("?xml");
   }
 
   /**
    * Handle a processing instruction.
    * Subclasses override; base clears attributes.
    */
-  addPi(name) {
+  addInstruction(name) {
   }
 }

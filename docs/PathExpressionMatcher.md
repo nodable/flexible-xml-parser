@@ -154,7 +154,7 @@ field on the context object:
 interface ValueParserContext {
   elementName:  string;             // tag name or attribute name
   elementValue: any;                // value before this parse call
-  elementType:  'TAG' | 'ATTRIBUTE';
+  elementType:  'ELEMENT' | 'ATTRIBUTE';
   matcher:      ReadOnlyMatcher;    // current path context
   isLeafNode:   boolean | null;     // true = leaf, false = has children, null = unknown
 }
@@ -199,7 +199,7 @@ const adminExpr = new Expression("..user[role=admin]");
 
 class AdminFormatter {
   parse(val, context) {
-    if (context?.elementType !== 'TAG') return val;
+    if (context?.elementType !== 'ELEMENT') return val;
     if (context?.matcher?.matches(adminExpr)) {
       return `[ADMIN] ${val}`;
     }
@@ -231,7 +231,7 @@ class LeafOnlyParser {
 
 ## 5. Matcher in custom OutputBuilder callbacks
 
-`addTag(tag, matcher)` and `closeTag(matcher)` both receive the `ReadOnlyMatcher`.
+`addElement(tag, matcher)` and `closeElement(matcher)` both receive the `ReadOnlyMatcher`.
 Use it to make structural decisions based on path:
 
 ```js
@@ -241,12 +241,12 @@ import JsObjOutputBuilder, { JsObjBuilder } from 'flex-xml-parser/src/OutputBuil
 const legacyExpr = new Expression("root.legacyField");
 
 class MigrationBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     // Rename a legacy tag on the fly
     if (matcher.matches(legacyExpr)) {
       tag = { ...tag, name: "modernField" };
     }
-    super.addTag(tag, matcher);
+    super.addElement(tag, matcher);
   }
 }
 
@@ -274,14 +274,14 @@ class FilterBuilder extends JsObjBuilder {
     super(...args);
     this._skipDepth = 0;
   }
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     if (matcher.matches(skipExpr)) { this._skipDepth++; return; }
     if (this._skipDepth > 0)      { this._skipDepth++; return; }
-    super.addTag(tag, matcher);
+    super.addElement(tag, matcher);
   }
-  closeTag(matcher) {
+  closeElement(matcher) {
     if (this._skipDepth > 0) { this._skipDepth--; return; }
-    super.closeTag(matcher);
+    super.closeElement(matcher);
   }
 }
 ```
@@ -327,7 +327,7 @@ class TypeAwareParser {
   parse(val, context) {
     if (context?.elementType === ElementType.ATTRIBUTE) {
       // attribute value
-    } else if (context?.elementType === ElementType.TAG) {
+    } else if (context?.elementType === ElementType.ELEMENT) {
       // tag text value
     }
     return val;
@@ -337,7 +337,7 @@ class TypeAwareParser {
 
 | Constant | Value |
 |---|---|
-| `ElementType.TAG` | `'TAG'` |
+| `ElementType.ELEMENT` | `'ELEMENT'` |
 | `ElementType.ATTRIBUTE` | `'ATTRIBUTE'` |
 
 ---

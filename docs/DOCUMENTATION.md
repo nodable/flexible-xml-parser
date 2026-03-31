@@ -87,7 +87,7 @@ XML input
 Entity replacement is controlled by two completely independent settings:
 
 ```
-DOCTYPE block → [doctypeOptions.enabled gate] → outputBuilder.addDocTypeEntities() → ['entity' gate] → replacement in values
+DOCTYPE block → [doctypeOptions.enabled gate] → outputBuilder.addInputEntities() → ['entity' gate] → replacement in values
 ```
 
 | `doctypeOptions.enabled` | `'entity'` in valueParsers | Result |
@@ -488,7 +488,7 @@ import { ElementType } from 'flex-xml-parser/src/OutputBuilders/BaseOutputBuilde
 {
   elementName:  string;              // tag name or attribute name
   elementValue: any;                 // value before this parse call
-  elementType:  'TAG' | 'ATTRIBUTE'; // ElementType.TAG or ElementType.ATTRIBUTE
+  elementType:  'ELEMENT' | 'ATTRIBUTE'; // ElementType.ELEMENT or ElementType.ATTRIBUTE
   matcher:      ReadOnlyMatcher;     // inspect current path, attrs, position
   isLeafNode:   boolean | null;      // true=leaf, false=has children, null=unknown
 }
@@ -559,8 +559,8 @@ class EventBuilder extends BaseOutputBuilder {
     return inst;
   }
 
-  addTag(tag)         { this.events.push({ type: 'open',  name: tag.name }); }
-  closeTag()          { this.events.push({ type: 'close' }); }
+  addElement(tag)         { this.events.push({ type: 'open',  name: tag.name }); }
+  closeElement()          { this.events.push({ type: 'close' }); }
   addValue(text)      { this.events.push({ type: 'text',  value: text }); }
   _addChild(key, val) { this.events.push({ type: 'child', key, val }); }
   getOutput()         { return this.events; }

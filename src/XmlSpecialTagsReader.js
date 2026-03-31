@@ -28,7 +28,7 @@ export function readCdata(parser) {
   );
 
   let text = parser.source.readUpto("]]>");
-  parser.outputBuilder.addCdata(text);
+  parser.outputBuilder.addLiteral(text);
 }
 
 export function readPiTag(parser) {
@@ -42,7 +42,7 @@ export function readPiTag(parser) {
   );
 
   // Flush attributes into the output builder's this.attributes accumulator
-  // so addDeclaration() / addPi() pick them up, mirroring what readOpeningTag
+  // so addDeclaration() / addInstruction() pick them up, mirroring what readOpeningTag
   // does for regular tags. PI tags are not pushed onto the matcher, so no
   // updateCurrent() call is needed here.
   if (!parser.options.skip.attributes) {
@@ -55,7 +55,7 @@ export function readPiTag(parser) {
       parser.outputBuilder.addDeclaration();
     }
   } else if (!parser.options.skip.pi) {
-    parser.outputBuilder.addPi("?" + tagExp.tagName);
+    parser.outputBuilder.addInstruction("?" + tagExp.tagName);
   }
 }
 

@@ -222,7 +222,7 @@ describe("PEM integration — matcher in value parser context", function () {
 
     class CaptureMatcher {
       parse(val, context) {
-        if (context?.elementType === ElementType.TAG) capturedMatcher = context.matcher;
+        if (context?.elementType === ElementType.ELEMENT) capturedMatcher = context.matcher;
         return val;
       }
     }
@@ -301,7 +301,7 @@ describe("PEM integration — matcher in value parser context", function () {
     });
     parser.parse(`<root><item id="1">text</item></root>`);
 
-    expect(types).toContain(ElementType.TAG);
+    expect(types).toContain(ElementType.ELEMENT);
     expect(types).toContain(ElementType.ATTRIBUTE);
   });
 
@@ -310,7 +310,7 @@ describe("PEM integration — matcher in value parser context", function () {
 
     class LeafCapture {
       parse(val, context) {
-        if (context?.elementType === ElementType.TAG) {
+        if (context?.elementType === ElementType.ELEMENT) {
           leafFlags.push({ name: context.elementName, isLeaf: context.isLeafNode });
         }
         return val;
@@ -332,7 +332,7 @@ describe("PEM integration — matcher in value parser context", function () {
 
     class LeafCapture {
       parse(val, context) {
-        if (context?.elementType === ElementType.TAG) {
+        if (context?.elementType === ElementType.ELEMENT) {
           leafFlags.push({ name: context.elementName, isLeaf: context.isLeafNode });
         }
         return val;
@@ -377,7 +377,7 @@ describe("PEM integration — matcher in value parser context", function () {
 
     class NameCapture {
       parse(val, context) {
-        if (context?.elementType === ElementType.TAG) names.push(context.elementName);
+        if (context?.elementType === ElementType.ELEMENT) names.push(context.elementName);
         return val;
       }
     }
@@ -476,13 +476,13 @@ describe("PEM integration — matcher in value parser context", function () {
 describe("PEM integration — matcher in custom OutputBuilder", function () {
   // ══════════════════════════════════════════════════════════════════════════════
 
-  it("should pass ReadOnlyMatcher to addTag() override", function () {
+  it("should pass ReadOnlyMatcher to addElement() override", function () {
     const tagPaths = [];
 
     class CapturingBuilder extends JsObjBuilder {
-      addTag(tag, matcher) {
+      addElement(tag, matcher) {
         tagPaths.push(matcher.toString());
-        super.addTag(tag, matcher);
+        super.addElement(tag, matcher);
       }
     }
 
@@ -493,13 +493,13 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
     expect(tagPaths).toContain("root.child");
   });
 
-  it("should pass ReadOnlyMatcher to closeTag() override", function () {
+  it("should pass ReadOnlyMatcher to closeElement() override", function () {
     const closedPaths = [];
 
     class CapturingBuilder extends JsObjBuilder {
-      closeTag(matcher) {
+      closeElement(matcher) {
         closedPaths.push(matcher.toString());
-        super.closeTag(matcher);
+        super.closeElement(matcher);
       }
     }
 
@@ -515,11 +515,11 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
     const legacyExpr = new Expression("root.oldName");
 
     class RenameBuilder extends JsObjBuilder {
-      addTag(tag, matcher) {
+      addElement(tag, matcher) {
         if (matcher.matches(legacyExpr)) {
           tag = { ...tag, name: "newName" };
         }
-        super.addTag(tag, matcher);
+        super.addElement(tag, matcher);
       }
     }
 
@@ -541,14 +541,14 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
         super(...args);
         this._skipDepth = 0;
       }
-      addTag(tag, matcher) {
+      addElement(tag, matcher) {
         if (matcher.matches(skipExpr)) { this._skipDepth++; return; }
         if (this._skipDepth > 0) { this._skipDepth++; return; }
-        super.addTag(tag, matcher);
+        super.addElement(tag, matcher);
       }
-      closeTag(matcher) {
+      closeElement(matcher) {
         if (this._skipDepth > 0) { this._skipDepth--; return; }
-        super.closeTag(matcher);
+        super.closeElement(matcher);
       }
     }
 
@@ -652,7 +652,7 @@ describe("PEM integration — ReadOnlyMatcher guards", function () {
 
     class PathCapture {
       parse(val, context) {
-        if (context?.elementType === ElementType.TAG) {
+        if (context?.elementType === ElementType.ELEMENT) {
           capturedPaths.push(context.matcher.toString());
         }
         return val;

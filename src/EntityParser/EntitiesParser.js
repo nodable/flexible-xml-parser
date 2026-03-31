@@ -66,7 +66,7 @@ export default class EntitiesParser {
     this.maxTotalExpansions = options.maxTotalExpansions || 0;
     this.maxExpandedLength = options.maxExpandedLength || 0;
 
-    // Per-document counters — reset automatically in addDocTypeEntities()
+    // Per-document counters — reset automatically in addInputEntities()
     this.totalExpansions = 0;
     this.expandedLength = 0;
 
@@ -101,14 +101,14 @@ export default class EntitiesParser {
   /**
    * Store entities collected from DOCTYPE and reset per-document counters.
    *
-   * Called by the output builder's addDocTypeEntities() at the start of each
+   * Called by the output builder's addInputEntities() at the start of each
    * parse. Resetting here is intentional — it ties the counter reset directly
    * to the moment new document data arrives, without needing a separate
    * resetCounters() call from the outside.
    *
    * Accepts { regx, val } objects (from DocTypeReader) or plain strings.
    */
-  addDocTypeEntities(entities) {
+  addInputEntities(entities) {
     // Reset per-document counters for the new parse
     this.totalExpansions = 0;
     this.expandedLength = 0;

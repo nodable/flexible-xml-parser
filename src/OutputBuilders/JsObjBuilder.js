@@ -81,7 +81,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     this.attributes = {};
   }
 
-  addTag(tag) {
+  addElement(tag) {
     let value = "";
     if (!isEmpty(this.attributes)) {
       if (this.options.attributes.groupBy) {
@@ -91,7 +91,7 @@ class JsObjBuilder extends BaseOutputBuilder {
       }
     }
 
-    // Push current tag's value-tree state so closeTag() can restore it.
+    // Push current tag's value-tree state so closeElement() can restore it.
     // tagName is included so the builder is self-contained — callers do not
     // need to pass the name back in on close.
     this.tagsStack.push([this.tagName, this.textValue, this.value]);
@@ -153,7 +153,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     return false; // all abstain → default
   }
 
-  closeTag() {
+  closeElement() {
     const tagName = this.tagName;
     let value = this.value;
     const textValue = this.textValue;
@@ -184,7 +184,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     const context = {
       elementName: tagName,
       elementValue: textValue,
-      elementType: ElementType.TAG,
+      elementType: ElementType.ELEMENT,
       matcher: this.matcher,
       isLeafNode: isLeafNode,
     };
@@ -274,7 +274,7 @@ class JsObjBuilder extends BaseOutputBuilder {
     else this.textValue = text;
   }
 
-  addPi(name) {
+  addInstruction(name) {
     let value = "";
     if (!isEmpty(this.attributes)) {
       if (this.options.attributes.groupBy) {

@@ -609,7 +609,7 @@ describe("Per-parse isolation", function () {
     const r1 = parser.parse(xml);
     expect(r1.root).toBe("xxxxx");
 
-    // Second parse — counters reset automatically in addDocTypeEntities()
+    // Second parse — counters reset automatically in addInputEntities()
     const r2 = parser.parse(xml);
     expect(r2.root).toBe("xxxxx");
   });

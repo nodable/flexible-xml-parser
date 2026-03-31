@@ -126,11 +126,11 @@ class MyBuilderInstance extends BaseOutputBuilder {
     // Initialize your data structure
   }
   
-  addTag(tag) {
+  addElement(tag) {
     // Handle opening tag
   }
   
-  closeTag() {
+  closeElement() {
     // Handle closing tag
   }
   

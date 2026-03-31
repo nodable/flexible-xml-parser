@@ -207,8 +207,8 @@ new XMLParser({ OutputBuilder: builder });
 
 // Custom builder by extending BaseOutputBuilder
 class MyBuilder extends BaseOutputBuilder {
-  addTag(tag, matcher)    { /* … */ }
-  closeTag(matcher)       { /* … */ }
+  addElement(tag, matcher)    { /* … */ }
+  closeElement(matcher)       { /* … */ }
   addValue(text, matcher) { /* … */ }
   getOutput()             { return this.result; }
 }

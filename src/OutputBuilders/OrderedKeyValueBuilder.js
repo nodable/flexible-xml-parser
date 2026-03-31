@@ -44,7 +44,7 @@ class OrderedKeyValBuilder extends BaseOutputBuilder {
     this._pendingStopNode = false;
   }
 
-  addTag(tag) {
+  addElement(tag) {
     this.tagsStack.push(this.currentNode);
     this.currentNode = new Node(tag.name, this.attributes);
     this.attributes = {};
@@ -63,7 +63,7 @@ class OrderedKeyValBuilder extends BaseOutputBuilder {
     }
   }
 
-  closeTag() {
+  closeElement() {
     const node = this.currentNode;
     this.currentNode = this.tagsStack.pop();
 
@@ -123,7 +123,7 @@ class OrderedKeyValBuilder extends BaseOutputBuilder {
     const context = {
       elementName: tagName,
       elementValue: text,
-      elementType: ElementType.TAG,
+      elementType: ElementType.ELEMENT,
       matcher: this.matcher,
       isLeafNode: this.currentNode?.children?.length === 0,
     };
@@ -132,7 +132,7 @@ class OrderedKeyValBuilder extends BaseOutputBuilder {
     });
   }
 
-  addPi(name) {
+  addInstruction(name) {
     const node = new Node(name, this.attributes);
     const keyValNode = this._convertToKeyVal(node);
     this.currentNode.children.push(keyValNode);

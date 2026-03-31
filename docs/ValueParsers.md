@@ -415,7 +415,7 @@ import { ElementType } from 'flex-xml-parser/src/OutputBuilders/BaseOutputBuilde
 interface ValueParserContext {
   elementName:  string;             // tag name or attribute name
   elementValue: any;                // the value before this parse call
-  elementType:  'TAG' | 'ATTRIBUTE'; // use ElementType.TAG / ElementType.ATTRIBUTE
+  elementType:  'ELEMENT' | 'ATTRIBUTE'; // use ElementType.ELEMENT / ElementType.ATTRIBUTE
   matcher:      ReadOnlyMatcher;    // inspect path, attributes, position
   isLeafNode:   boolean | null;     // true=leaf, false=has children, null=unknown
 }
@@ -425,7 +425,7 @@ interface ValueParserContext {
 
 | Constant | Value | When set |
 |---|---|---|
-| `ElementType.TAG` | `'TAG'` | Tag text content |
+| `ElementType.ELEMENT` | `'ELEMENT'` | Tag text content |
 | `ElementType.ATTRIBUTE` | `'ATTRIBUTE'` | Attribute value |
 
 `isLeafNode` for attributes is always `true`. For tags it is `true` when the tag

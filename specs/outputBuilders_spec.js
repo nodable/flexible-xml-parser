@@ -85,8 +85,8 @@ describe("Output Builders", function () {
       // To provide a custom OutputBuilder to XMLParser you need a factory object
       // with a getInstance() method — exactly as shown in customOutputBuilder_spec.js.
       class CustomBuilder extends JsObjBuilder {
-        closeTag(matcher) {
-          super.closeTag(matcher);
+        closeElement(matcher) {
+          super.closeElement(matcher);
         }
       }
 

@@ -53,9 +53,9 @@ describe("Custom OutputBuilder — tag name transformation", function () {
     },
     () => {
       class LowerCaseTagBuilder extends JsObjBuilder {
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           tag = { ...tag, name: tag.name.toLowerCase() };
-          super.addTag(tag, matcher);
+          super.addElement(tag, matcher);
         }
       }
       return new XMLParser({ OutputBuilder: makeFactory(LowerCaseTagBuilder) });
@@ -71,9 +71,9 @@ describe("Custom OutputBuilder — tag name transformation", function () {
     },
     () => {
       class RenameBuilder extends JsObjBuilder {
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           tag = { ...tag, name: tag.name === "oldName" ? "newName" : tag.name };
-          super.addTag(tag, matcher);
+          super.addElement(tag, matcher);
         }
       }
       return new XMLParser({ OutputBuilder: makeFactory(RenameBuilder) });
@@ -89,9 +89,9 @@ describe("Custom OutputBuilder — tag name transformation", function () {
     },
     () => {
       class StripNsBuilder extends JsObjBuilder {
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           const name = tag.name.includes(":") ? tag.name.split(":")[1] : tag.name;
-          super.addTag({ ...tag, name }, matcher);
+          super.addElement({ ...tag, name }, matcher);
         }
       }
       return new XMLParser({ OutputBuilder: makeFactory(StripNsBuilder) });
@@ -120,19 +120,19 @@ describe("Custom OutputBuilder — tag name transformation", function () {
           super(...args);
           this._skipDepth = 0;
         }
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           if (this._skipDepth > 0 || tag.name === "secret") {
             this._skipDepth++;
             return; // don't push to stack
           }
-          super.addTag(tag, matcher);
+          super.addElement(tag, matcher);
         }
-        closeTag(matcher) {
+        closeElement(matcher) {
           if (this._skipDepth > 0) {
             this._skipDepth--;
             return;
           }
-          super.closeTag(matcher);
+          super.closeElement(matcher);
         }
       }
       return new XMLParser({ OutputBuilder: makeFactory(SkipTagBuilder) });
@@ -148,11 +148,11 @@ describe("Custom OutputBuilder — tag name transformation", function () {
     },
     () => {
       class RenameOnCloseBuilder extends JsObjBuilder {
-        closeTag(matcher) {
+        closeElement(matcher) {
           if (this.tagName === "item") {
             this.tagName = "entry";
           }
-          super.closeTag(matcher);
+          super.closeElement(matcher);
         }
       }
       return new XMLParser({ OutputBuilder: makeFactory(RenameOnCloseBuilder) });
@@ -300,7 +300,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
           this._pendingAttrs[name] = value;
         }
 
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           // Transform the collected attrs before handing to super
           const raw = this._pendingAttrs;
           this._pendingAttrs = {};
@@ -317,7 +317,7 @@ describe("Custom OutputBuilder — attribute transformation", function () {
             super.addAttribute(k, v);
           }
 
-          super.addTag(tag, matcher);
+          super.addElement(tag, matcher);
         }
       }
       return new XMLParser({
@@ -345,8 +345,8 @@ describe("Custom OutputBuilder — combined tag and attribute transformation", f
     },
     () => {
       class LowerCaseAllBuilder extends JsObjBuilder {
-        addTag(tag, matcher) {
-          super.addTag({ ...tag, name: tag.name.toLowerCase() }, matcher);
+        addElement(tag, matcher) {
+          super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
         }
         addAttribute(name, value) {
           super.addAttribute(name.toLowerCase(), value);
@@ -372,10 +372,10 @@ describe("Custom OutputBuilder — combined tag and attribute transformation", f
     },
     () => {
       class TagNameAttrBuilder extends JsObjBuilder {
-        addTag(tag, matcher) {
+        addElement(tag, matcher) {
           // Inject before super so it lands in this.attributes
           super.addAttribute("_tag", tag.name);
-          super.addTag(tag, matcher);
+          super.addElement(tag, matcher);
         }
       }
       return new XMLParser({

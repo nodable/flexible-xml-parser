@@ -519,20 +519,20 @@ export interface OutputBuilderFactory {
 }
 
 export interface OutputBuilderInstance {
-  addTag(tag: { name: string }, matcher: any): void;
-  closeTag(matcher: any): void;
+  addElement(tag: { name: string }, matcher: any): void;
+  closeElement(matcher: any): void;
   addValue(text: string, matcher: any): void;
   addAttribute(name: string, value: any): void;
   addComment(text: string): void;
-  addCdata(text: string): void;
+  addLiteral(text: string): void;
   addDeclaration(): void;
-  addPi(name: string): void;
+  addInstruction(name: string): void;
   /**
    * Called by the XML parser after the DOCTYPE block is read.
    * Implementations forward entities to any registered value parser
-   * that implements addDocTypeEntities().
+   * that implements addInputEntities().
    */
-  addDocTypeEntities(entities: object): void;
+  addInputEntities(entities: object): void;
   getOutput(): any;
   registeredValParsers: Record<string, ValueParser>;
   /**
@@ -625,7 +625,7 @@ export class JsObjBuilder implements OutputBuilderFactory {
  * Discriminates between tag text values and attribute values.
  */
 export declare const ElementType: {
-  readonly TAG: 'TAG';
+  readonly TAG: 'ELEMENT';
   readonly ATTRIBUTE: 'ATTRIBUTE';
 };
 
@@ -646,18 +646,18 @@ export declare class BaseOutputBuilder implements OutputBuilderInstance {
   addAttribute(name: string, value: any, matcher: any): void;
   parseValue(val: any, valParsers: Array<string | ValueParser>, context?: object): any;
   addComment(text: string): void;
-  addCdata(text: string): void;
+  addLiteral(text: string): void;
   addRawValue(text: string): void;
   addDeclaration(): void;
-  addPi(name: string): void;
+  addInstruction(name: string): void;
   /**
    * Receive DOCTYPE entities from the XML parser and forward them to any
-   * registered value parser that implements addDocTypeEntities().
+   * registered value parser that implements addInputEntities().
    * Called automatically — no manual wiring needed.
    */
-  addDocTypeEntities(entities: object): void;
-  addTag(tag: { name: string }, matcher: any): void;
-  closeTag(matcher: any): void;
+  addInputEntities(entities: object): void;
+  addElement(tag: { name: string }, matcher: any): void;
+  closeElement(matcher: any): void;
   addValue(text: string, matcher: any): void;
   getOutput(): any;
   registeredValParsers: Record<string, ValueParser>;
@@ -698,7 +698,7 @@ export declare class EntitiesParser {
   addExternalEntities(map: EntityMap): void;
   addExternalEntity(key: string, val: string): void;
   /** Load DOCTYPE entities and reset per-document expansion counters. */
-  addDocTypeEntities(entities: object): void;
+  addInputEntities(entities: object): void;
   replaceEntitiesValue(val: string): string;
   parse(val: string): string;
 }
@@ -725,7 +725,7 @@ export declare class EntitiesValueParser implements ValueParser {
   /** Register a custom entity. Key must not contain '&' or ';'. */
   addEntity(key: string, value: string): void;
   /** Receive DOCTYPE entities from the output builder. Resets per-document counters. */
-  addDocTypeEntities(entities: object): void;
+  addInputEntities(entities: object): void;
   parse(val: any, context?: object): any;
 }
 

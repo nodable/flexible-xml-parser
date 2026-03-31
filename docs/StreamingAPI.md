@@ -170,8 +170,8 @@ streams results to another destination (file, database, etc.) and returns
 
 ```js
 class WriteToDatabaseBuilder extends BaseOutputBuilder {
-  addTag(tag)   { /* open record */ }
-  closeTag()    { /* flush record to DB */ }
+  addElement(tag)   { /* open record */ }
+  closeElement()    { /* flush record to DB */ }
   addValue(v)   { /* accumulate field value */ }
   getOutput()   { return null; } // nothing to return — already written
 }

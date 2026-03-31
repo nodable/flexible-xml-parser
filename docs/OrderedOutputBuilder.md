@@ -80,7 +80,7 @@ Collapse a pure-text or stop-node leaf to `{ tagName: value }` instead of the fu
   1. `compactLeaf` builder option is true.
   2. Node has no attributes — a node with attributes cannot be represented as a plain scalar value.
   3. One of:
-      a. Exactly one child that is a pure text entry { '#text': value }. This is the standard leaf case. Stop nodes that have content also satisfy this condition because addValue() already pushed a '#text' child before closeTag() is called.
+      a. Exactly one child that is a pure text entry { '#text': value }. This is the standard leaf case. Stop nodes that have content also satisfy this condition because addValue() already pushed a '#text' child before closeElement() is called.
       b. Zero children AND the node is a stop node (empty raw content between the stop-node tags).
       c. Zero children AND not a stop node — self-closing or empty open/close tag with no text — collapses to the empty string "".
 

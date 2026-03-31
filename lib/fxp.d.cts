@@ -518,14 +518,14 @@ interface OutputBuilderFactory {
 }
 
 interface OutputBuilderInstance {
-  addTag(tag: { name: string }, matcher: any): void;
-  closeTag(matcher: any): void;
+  addElement(tag: { name: string }, matcher: any): void;
+  closeElement(matcher: any): void;
   addValue(text: string, matcher: any): void;
   addAttribute(name: string, value: any): void;
   addComment(text: string): void;
   addCdata(text: string): void;
   addDeclaration(): void;
-  addPi(name: string): void;
+  addInstruction(name: string): void;
   getOutput(): any;
   registeredValParsers: Record<string, ValueParser>;
   /**
@@ -627,7 +627,7 @@ class JsObjBuilder implements OutputBuilderFactory {
  * Discriminates between tag text values and attribute values.
  */
 declare const ElementType: {
-  readonly TAG: 'TAG';
+  readonly TAG: 'ELEMENT';
   readonly ATTRIBUTE: 'ATTRIBUTE';
 };
 
@@ -651,9 +651,9 @@ declare class BaseOutputBuilder implements OutputBuilderInstance {
   addCdata(text: string): void;
   addRawValue(text: string): void;
   addDeclaration(): void;
-  addPi(name: string): void;
-  addTag(tag: { name: string }, matcher: any): void;
-  closeTag(matcher: any): void;
+  addInstruction(name: string): void;
+  addElement(tag: { name: string }, matcher: any): void;
+  closeElement(matcher: any): void;
   addValue(text: string, matcher: any): void;
   getOutput(): any;
   registeredValParsers: Record<string, ValueParser>;

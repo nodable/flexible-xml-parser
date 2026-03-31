@@ -178,14 +178,14 @@ describe('parseStream — parser options', () => {
       getInstance() {
         return {
           registeredValParsers: {},
-          addTag(tag) { counts[tag.name] = (counts[tag.name] || 0) + 1; },
-          closeTag() { },
+          addElement(tag) { counts[tag.name] = (counts[tag.name] || 0) + 1; },
+          closeElement() { },
           addValue() { },
           addAttribute() { },
           addComment() { },
-          addCdata() { },
+          addLiteral() { },
           addDeclaration() { },
-          addPi() { },
+          addInstruction() { },
           addDocType() { },
           getOutput() { return counts; },
         };

@@ -16,7 +16,7 @@ import { ParseError, ErrorCode } from '../ParseError.js';
  *   evp.addEntity('trade', '™');
  *
  * DOCTYPE entities are delivered automatically by the output builder when the
- * XML parser calls outputBuilder.addDocTypeEntities(). No manual wiring needed.
+ * XML parser calls outputBuilder.addInputEntities(). No manual wiring needed.
  *
  * Constructor options (all optional):
  *
@@ -81,15 +81,15 @@ export default class EntitiesValueParser {
   /**
    * Receive DOCTYPE entities from the output builder.
    *
-   * Called automatically by BaseOutputBuilder.addDocTypeEntities() once per
+   * Called automatically by BaseOutputBuilder.addInputEntities() once per
    * parse, immediately after the XML parser has read the DOCTYPE block.
    * Internally resets per-document expansion counters before loading the
    * new entity set — no separate reset step is required.
    *
    * @param {object} entities — raw entity map from DocTypeReader
    */
-  addDocTypeEntities(entities) {
-    this._parser.addDocTypeEntities(entities);
+  addInputEntities(entities) {
+    this._parser.addInputEntities(entities);
   }
 
   // -------------------------------------------------------------------------

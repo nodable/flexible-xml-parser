@@ -231,10 +231,10 @@ export default class Xml2JsParser {
       this._stopNodeProcessor.resumeAfterOpenTag();
       readTagExp(this); // re-consume the opening tag from the rewound source
       const content = this._stopNodeProcessor.collect(this.source);
-      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
       this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
-      this.outputBuilder.closeTag(this.readonlyMatcher);
+      this.outputBuilder.closeElement(this.readonlyMatcher);
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
@@ -279,12 +279,12 @@ export default class Xml2JsParser {
     const stopNodeConfig = this.isStopNode();
 
     if (this.isUnpaired(processedTagName)) {
-      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
-      this.outputBuilder.closeTag(this.readonlyMatcher);
+      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.closeElement(this.readonlyMatcher);
       this.matcher.pop();
     } else if (tagExp.selfClosing) {
-      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
-      this.outputBuilder.closeTag(this.readonlyMatcher);
+      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.closeElement(this.readonlyMatcher);
       this.matcher.pop();
     } else if (stopNodeConfig) {
       // Create a fresh processor with the matching nested + skipEnclosures config.
@@ -295,10 +295,10 @@ export default class Xml2JsParser {
       this._stopNodeProcessorMeta = { tagDetail };
       this._stopNodeProcessor.activate();
       const content = this._stopNodeProcessor.collect(this.source);
-      this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
       this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
-      this.outputBuilder.closeTag(this.readonlyMatcher);
+      this.outputBuilder.closeElement(this.readonlyMatcher);
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
@@ -314,13 +314,13 @@ export default class Xml2JsParser {
    * output builder are updated together, keeping them in sync.
    *
    * Custom OutputBuilder implementations that maintain their own tag stack
-   * should override addTag() rather than calling pushTag() directly.
+   * should override addElement() rather than calling pushTag() directly.
    *
    * @param {TagDetail} tagDetail
    */
   pushTag(tagDetail) {
     this.tagsStack.push(this.currentTagDetail);
-    this.outputBuilder.addTag(tagDetail, this.readonlyMatcher);
+    this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
     this.currentTagDetail = tagDetail;
   }
 
@@ -330,7 +330,7 @@ export default class Xml2JsParser {
    * updated together.
    */
   popTag() {
-    this.outputBuilder.closeTag(this.readonlyMatcher);
+    this.outputBuilder.closeElement(this.readonlyMatcher);
     this.matcher.pop();
     this.currentTagDetail = this.tagsStack.pop();
   }
@@ -351,7 +351,7 @@ export default class Xml2JsParser {
         if (this.options.doctypeOptions.enabled &&
           docTypeEntities &&
           Object.keys(docTypeEntities).length > 0) {
-          this.outputBuilder.addDocTypeEntities(docTypeEntities);
+          this.outputBuilder.addInputEntities(docTypeEntities);
         }
       }
     } else if (startCh === "?") {

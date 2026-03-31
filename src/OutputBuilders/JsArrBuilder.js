@@ -47,7 +47,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     this._pendingStopNode = false;
   }
 
-  addTag(tag) {
+  addElement(tag) {
     this.tagsStack.push(this.currentNode);
     this.currentNode = new Node(tag.name, this.attributes);
     this.attributes = {};
@@ -66,7 +66,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     }
   }
 
-  closeTag() {
+  closeElement() {
     const node = this.currentNode;
     this.currentNode = this.tagsStack.pop();
 
@@ -109,7 +109,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     const context = {
       elementName: tagName,
       elementValue: text,
-      elementType: ElementType.TAG,
+      elementType: ElementType.ELEMENT,
       matcher: this.matcher,
       isLeafNode: this.currentNode?.child?.length === 0,
     };
@@ -118,7 +118,7 @@ class JsArrBuilder extends BaseOutputBuilder {
     });
   }
 
-  addPi(name) {
+  addInstruction(name) {
     const node = new Node(name, this.attributes);
     this.currentNode.child.push(node);
     this.attributes = {};

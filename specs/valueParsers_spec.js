@@ -236,7 +236,7 @@ describe("Value Parsers", function () {
     expect(seenContexts.length).toBeGreaterThan(0);
     // New context shape
     expect(seenContexts[0].elementName).toBe("price");
-    expect(seenContexts[0].elementType).toBe("TAG");
+    expect(seenContexts[0].elementType).toBe("ELEMENT");
     expect(seenContexts[0].isLeafNode).toBe(true);
     expect(seenContexts[0].hasMatcher).toBe(true);
   });

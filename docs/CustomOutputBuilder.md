@@ -41,8 +41,8 @@ The four methods you can override:
 
 | Method | Called when | Common use |
 |--------|-------------|------------|
-| `addTag(tag, matcher)` | An opening tag is encountered | Rename or skip tags |
-| `closeTag(matcher)` | A closing tag is encountered | Rename tags at close time, skip subtrees |
+| `addElement(tag, matcher)` | An opening tag is encountered | Rename or skip tags |
+| `closeElement(matcher)` | A closing tag is encountered | Rename tags at close time, skip subtrees |
 | `addAttribute(name, value)` | An attribute is encountered | Rename, drop, or transform attributes |
 | `addValue(text, matcher)` | Text content is encountered | Transform text values |
 
@@ -56,8 +56,8 @@ In every override, call `super.method(...)` to continue normal processing. Omit 
 
 ```js
 class LowerCaseTagBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
-    super.addTag({ ...tag, name: tag.name.toLowerCase() }, matcher);
+  addElement(tag, matcher) {
+    super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
   }
 }
 ```
@@ -72,9 +72,9 @@ parser.parse(`<ROOT><CHILD>value</CHILD></ROOT>`);
 
 ```js
 class RenameTagBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     const name = tag.name === "Person" ? "person" : tag.name;
-    super.addTag({ ...tag, name }, matcher);
+    super.addElement({ ...tag, name }, matcher);
   }
 }
 ```
@@ -83,9 +83,9 @@ class RenameTagBuilder extends JsObjBuilder {
 
 ```js
 class StripNsPrefixBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     const name = tag.name.includes(":") ? tag.name.split(":")[1] : tag.name;
-    super.addTag({ ...tag, name }, matcher);
+    super.addElement({ ...tag, name }, matcher);
   }
 }
 ```
@@ -112,20 +112,20 @@ class SkipTagBuilder extends JsObjBuilder {
     this._skipDepth = 0;
   }
 
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     if (this._skipDepth > 0 || tag.name === "internal") {
       this._skipDepth++;
       return; // don't call super — tag is suppressed
     }
-    super.addTag(tag, matcher);
+    super.addElement(tag, matcher);
   }
 
-  closeTag(matcher) {
+  closeElement(matcher) {
     if (this._skipDepth > 0) {
       this._skipDepth--;
       return; // matching close of a suppressed tag
     }
-    super.closeTag(matcher);
+    super.closeElement(matcher);
   }
 }
 ```
@@ -220,7 +220,7 @@ class NormaliseAttrsBuilder extends JsObjBuilder {
     this._pending[name] = value;
   }
 
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     // At addTag time we have the complete attribute set for this opening tag.
     // Apply any normalisation, then inject the result into the builder.
     const pending = this._pending;
@@ -232,7 +232,7 @@ class NormaliseAttrsBuilder extends JsObjBuilder {
       super.addAttribute(finalKey, val);                  // emit
     }
 
-    super.addTag(tag, matcher);
+    super.addElement(tag, matcher);
   }
 }
 ```
@@ -251,9 +251,9 @@ Attributes not present in the XML but added this way appear in the output exactl
 
 ```js
 class InjectAttrBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
+  addElement(tag, matcher) {
     super.addAttribute("_tag", tag.name); // inject before super.addTag
-    super.addTag(tag, matcher);
+    super.addElement(tag, matcher);
   }
 }
 ```
@@ -298,8 +298,8 @@ All overrides compose naturally in a single subclass:
 
 ```js
 class NormalisedBuilder extends JsObjBuilder {
-  addTag(tag, matcher) {
-    super.addTag({ ...tag, name: tag.name.toLowerCase() }, matcher);
+  addElement(tag, matcher) {
+    super.addElement({ ...tag, name: tag.name.toLowerCase() }, matcher);
   }
   addAttribute(name, value) {
     if (name.startsWith("xmlns")) return;       // drop namespace declarations

@@ -37,7 +37,7 @@ describe("Processing Instructions — XML declaration", function () {
   // NOTE: skip.declaration is currently not working as expected due to a bug
   // in XmlSpecialTagsReader.js. The tagName returned by readPiExp is "xml"
   // (without the leading "?"), so the check `tagExp.tagName === "?xml"` always
-  // fails — addDeclaration() is never called, addPi("?xml") is always used,
+  // fails — addDeclaration() is never called, addInstruction("?xml") is always used,
   // and skip.declaration: true has no effect. This test documents the BUG:
   it("BUG: skip.declaration: true should omit ?xml from output (currently broken)", function () {
     const parser = new XMLParser({ skip: { declaration: true } });
