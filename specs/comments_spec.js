@@ -1,5 +1,4 @@
 import XMLParser from "../src/XMLParser.js";
-import NodeTreeBuilder from "../src/OutputBuilders/NodeTreeBuilder.js";
 import { runAcrossAllInputSources } from "./helpers/testRunner.js";
 
 describe("Comments", function () {
@@ -22,25 +21,6 @@ describe("Comments", function () {
       expect(result.class_list.student["#comment"]).toBeDefined();
     },
     { nameFor: { comment: "#comment" } }
-  );
-
-  runAcrossAllInputSources(
-    "should preserve order with comments when using NodeTreeBuilder",
-    `
-      <!--Root comment-->
-      <root>
-        <!--First comment-->
-        <tag>value</tag>
-        <!--Second comment-->
-      </root>`,
-    (result) => {
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
-    },
-    {
-      nameFor: { comment: "#comment" },
-      OutputBuilder: new NodeTreeBuilder(),
-    }
   );
 
   runAcrossAllInputSources(

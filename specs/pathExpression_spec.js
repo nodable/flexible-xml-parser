@@ -14,14 +14,14 @@
 
 import XMLParser from "../src/XMLParser.js";
 import { Expression } from "path-expression-matcher";
-import JsObjOutputBuilder, { CompactObjBuilder } from "../src/OutputBuilders/CompactObjBuilder.js";
-import { ElementType } from "../src/OutputBuilders/BaseOutputBuilder.js";
+import { CompactBuilderFactory, CompactBuilder } from "@solothought/compact-builder";
+import { ElementType } from "@solothought/base-output-builder";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 function makeFactory(BuilderSubclass) {
   return {
     getInstance(parserOptions) {
-      const base = new JsObjOutputBuilder();
+      const base = new CompactBuilderFactory();
       return new BuilderSubclass(parserOptions, base.options, { ...base.registeredValParsers });
     },
     registerValueParser(name, parser) { },
@@ -479,7 +479,7 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
   it("should pass ReadOnlyMatcher to addElement() override", function () {
     const tagPaths = [];
 
-    class CapturingBuilder extends CompactObjBuilder {
+    class CapturingBuilder extends CompactBuilder {
       addElement(tag, matcher) {
         tagPaths.push(matcher.toString());
         super.addElement(tag, matcher);
@@ -496,7 +496,7 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
   it("should pass ReadOnlyMatcher to closeElement() override", function () {
     const closedPaths = [];
 
-    class CapturingBuilder extends CompactObjBuilder {
+    class CapturingBuilder extends CompactBuilder {
       closeElement(matcher) {
         closedPaths.push(matcher.toString());
         super.closeElement(matcher);
@@ -514,7 +514,7 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
   it("should rename a tag based on its path using Expression matching in addTag", function () {
     const legacyExpr = new Expression("root.oldName");
 
-    class RenameBuilder extends CompactObjBuilder {
+    class RenameBuilder extends CompactBuilder {
       addElement(tag, matcher) {
         if (matcher.matches(legacyExpr)) {
           tag = { ...tag, name: "newName" };
@@ -536,7 +536,7 @@ describe("PEM integration — matcher in custom OutputBuilder", function () {
     // The clean pattern is to set a flag in addTag and check it in closeTag.
     const skipExpr = new Expression("root.internal");
 
-    class SkipBuilder extends CompactObjBuilder {
+    class SkipBuilder extends CompactBuilder {
       constructor(...args) {
         super(...args);
         this._skipDepth = 0;

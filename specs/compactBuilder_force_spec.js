@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import JsObjOutputBuilder, { CompactObjBuilder } from "../src/OutputBuilders/CompactObjBuilder.js";
+import { CompactBuilder, CompactBuilderFactory } from "@solothought/compact-builder";
 import { Expression } from "path-expression-matcher";
 import {
   frunAcrossAllInputSources,
@@ -12,7 +12,7 @@ const rootItemExp = new Expression('root.item');
 
 describe("Output Builder Options - forceArray and forceTextNode", function () {
 
-  describe("forceArray option - CompactObjBuilder", function () {
+  describe("forceArray option - CompactBuilder", function () {
 
     runAcrossAllInputSources(
       "should force single tag into array when forceArray returns true",
@@ -30,7 +30,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
         skip: { attributes: false },
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return matcher.matches(rootItemExp);
           }
@@ -64,7 +64,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             // Force all tags under 'items' to be arrays
             return matcher.matches(new Expression('root.items.*'));
@@ -87,7 +87,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             // Force only leaf nodes to be arrays
             return isLeafNode === true;
@@ -111,7 +111,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item[2]).toBe("Third");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return matcher.matches(rootItemExp);
           }
@@ -135,7 +135,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       {
 
         skip: { attributes: false },
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             // Force array only for items with type="special"
             return matcher.matches(rootItemExp) &&
@@ -171,7 +171,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return matcher.matches(new Expression('..target'));
           }
@@ -194,7 +194,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       {
 
         skip: { attributes: false },
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return matcher.matches(rootItemExp);
           }
@@ -204,7 +204,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("forceTextNode option - CompactObjBuilder", function () {
+  describe("forceTextNode option - CompactBuilder", function () {
 
     runAcrossAllInputSources(
       "should create text node for leaf tag when forceTextNode is true",
@@ -220,7 +220,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -238,7 +238,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -257,7 +257,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       {
 
         skip: { attributes: false },
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -278,7 +278,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.parent["#text"]).toBe("");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -296,7 +296,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -321,7 +321,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true,
         }),
         nameFor: {
@@ -351,7 +351,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       {
 
         skip: { attributes: false },
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceTextNode: true
         })
       }
@@ -359,7 +359,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("Combined forceArray and forceTextNode - CompactObjBuilder", function () {
+  describe("Combined forceArray and forceTextNode - CompactBuilderFactory", function () {
 
     runAcrossAllInputSources(
       "should work together - force array and text node",
@@ -374,7 +374,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => matcher.matches(rootItemExp),
           forceTextNode: true
         })
@@ -396,7 +396,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => matcher.matches(rootItemExp),
           forceTextNode: true
         })
@@ -421,7 +421,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return "true";  // String instead of boolean
           }
@@ -434,7 +434,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
       let capturedIsLeafNode;
       const parser = new XMLParser({
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             capturedIsLeafNode = isLeafNode;
             return false;
@@ -472,7 +472,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
       },
       {
 
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => {
             return matcher.matches(new Expression('root.a.b.c.d.e'));
           }
@@ -502,7 +502,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         }
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => matcher.matches(rootItemExp)
         })
       }
@@ -510,7 +510,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
 
   });
 
-  describe("alwaysArray option - CompactObjBuilder", function () {
+  describe("alwaysArray option - CompactBuilder", function () {
 
     runAcrossAllInputSources(
       "should force single tag into array using string name",
@@ -523,7 +523,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item[0]).toBe("Single");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["..item"]
         })
       }
@@ -540,7 +540,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item[0]).toBe("Single");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: [new Expression('root.item')]
         })
       }
@@ -560,7 +560,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.product[0]).toBe("Widget");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["..item", new Expression('root.product')]
         })
       }
@@ -579,7 +579,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(Array.isArray(result.root.other)).toBe(false);
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["..item"]
         })
       }
@@ -597,7 +597,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item).toBe("Value");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["..item"],
           forceArray: (matcher, isLeafNode) => false  // explicit veto
         })
@@ -616,7 +616,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item[0]).toBe("Value");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           forceArray: (matcher, isLeafNode) => matcher.matches(rootItemExp)
         })
       }
@@ -633,7 +633,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(Array.isArray(result.root.item)).toBe(true);
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["..item"],
           forceArray: (matcher, isLeafNode) => undefined  // abstain
         })
@@ -652,7 +652,7 @@ describe("Output Builder Options - forceArray and forceTextNode", function () {
         expect(result.root.item).toBe("Value");
       },
       {
-        OutputBuilder: new JsObjOutputBuilder({
+        OutputBuilder: new CompactBuilderFactory({
           alwaysArray: ["other"],       // doesn't match 'item'
           forceArray: () => undefined   // abstain
         })

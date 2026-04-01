@@ -1,4 +1,4 @@
-import JsObjOutputBuilder from './OutputBuilders/CompactObjBuilder.js';
+import { CompactBuilderFactory } from '@solothought/compact-builder';
 import { Expression } from 'path-expression-matcher';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
@@ -185,7 +185,7 @@ export const buildOptions = function (options) {
   }
 
   if (!finalOptions.OutputBuilder) {
-    finalOptions.OutputBuilder = new JsObjOutputBuilder();
+    finalOptions.OutputBuilder = new CompactBuilderFactory();
   }
 
   // Normalize stopNodes entries into { expression, nested, skipEnclosures } objects.

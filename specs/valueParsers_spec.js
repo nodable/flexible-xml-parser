@@ -1,8 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import EntitiesValueParser from "../src/EntityParser/EntitiesParser.js";
-import JsObjOutputBuilder from "../src/OutputBuilders/CompactObjBuilder.js";
-import numParser from "../src/OutputBuilders/ValueParsers/number.js";
-import { skip } from "node:test";
+import { numberParser, EntitiesValueParser } from "@solothought/base-output-builder";
+import { CompactBuilderFactory } from "@solothought/compact-builder";
 
 describe("Value Parsers", function () {
 
@@ -81,7 +79,7 @@ describe("Value Parsers", function () {
     const evp = new EntitiesValueParser({
       docType: true
     });
-    const builder = new JsObjOutputBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
 
     const parser = new XMLParser({
@@ -104,7 +102,7 @@ describe("Value Parsers", function () {
 
   it("should expand HTML entities when entityParseOptions.html is true", function () {
     const evp = new EntitiesValueParser({ html: true });
-    const builder = new JsObjOutputBuilder({
+    const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }
       tags: { valueParsers: [evp, "number"] }
       // tags: { valueParsers: ["entity", "number"] }
@@ -126,7 +124,7 @@ describe("Value Parsers", function () {
     const evp = new EntitiesValueParser({
       html: true
     });
-    const builder = new JsObjOutputBuilder({
+    const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }
       attributes: { valueParsers: [evp] }
     });
@@ -172,7 +170,7 @@ describe("Value Parsers", function () {
     const parser = new XMLParser({
       tags: {
         valueParsers: [
-          new numParser({ hex: true, leadingZeros: false, eNotation: true }),
+          new numberParser({ hex: true, leadingZeros: false, eNotation: true }),
         ],
       },
     });
@@ -250,7 +248,7 @@ describe("Value Parsers", function () {
       }
     }
 
-    const builder = new JsObjOutputBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("uppercase", new UpperCaseParser());
 
     const parser = new XMLParser({

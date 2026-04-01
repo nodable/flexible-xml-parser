@@ -1,5 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import { EntitiesValueParser, CompactObjBuilder } from "../src/fxp.js";
+import { EntitiesValueParser } from "@solothought/base-output-builder";
+import { CompactBuilderFactory } from "@solothought/compact-builder";
 import {
   runAcrossAllInputSources,
   frunAcrossAllInputSources,
@@ -23,7 +24,7 @@ const withDocType = (entities, body) => {
 // Keeps test bodies concise — callers only specify what they care about.
 const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}) => {
   const evp = new EntitiesValueParser({ default: true, ...entitiesOpts });
-  const builder = new CompactObjBuilder();
+  const builder = new CompactBuilderFactory();
   builder.registerValueParser("entity", evp);
   return new XMLParser({
     ...parserOpts,
@@ -163,7 +164,7 @@ describe("DOCTYPE — replaceEntities value parser gate", function () {
     },
     () => {
       // No EntitiesValueParser registered; chain has no 'entity'
-      const builder = new CompactObjBuilder({ tags: { valueParsers: ["boolean", "number"] } });
+      const builder = new CompactBuilderFactory({ tags: { valueParsers: ["boolean", "number"] } });
       return new XMLParser({
         doctypeOptions: { enabled: true },
         OutputBuilder: builder,
@@ -302,7 +303,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
   it("should replace a registered external entity", function () {
     const evp = new EntitiesValueParser({ default: true });
     evp.addEntity("copy", "©");
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
@@ -313,7 +314,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     const evp = new EntitiesValueParser({ default: true });
     evp.addEntity("copy", "©");
     evp.addEntity("trade", "™");
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy; &trade;</root>");
@@ -324,7 +325,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     //TODO: output builder options building is incorrect. default values like html are being set as true.
     const evp = new EntitiesValueParser({ default: true, external: false });
     evp.addEntity("copy", "©");
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     const result = parser.parse("<root>&copy;</root>");
@@ -334,14 +335,14 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
   it("external: false then re-enable — entities applied when external: true", function () {
     const evpOff = new EntitiesValueParser({ default: true, external: false });
     evpOff.addEntity("copy", "©");
-    const builderOff = new CompactObjBuilder();
+    const builderOff = new CompactBuilderFactory();
     builderOff.registerValueParser("entity", evpOff);
     const parserOff = new XMLParser({ OutputBuilder: builderOff });
     expect(parserOff.parse("<root>&copy;</root>").root).toBe("&copy;");
 
     const evpOn = new EntitiesValueParser({ default: true, external: true });
     evpOn.addEntity("copy", "©");
-    const builderOn = new CompactObjBuilder();
+    const builderOn = new CompactBuilderFactory();
     builderOn.registerValueParser("entity", evpOn);
     const parserOn = new XMLParser({ OutputBuilder: builderOn });
     expect(parserOn.parse("<root>&copy;</root>").root).toBe("©");
@@ -365,7 +366,7 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
   it("external entity coexists with docType entity — both replaced", function () {
     const evp = new EntitiesValueParser({ default: true });
     evp.addEntity("ext", "external");
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
@@ -503,7 +504,7 @@ describe("Security — maxTotalExpansions", function () {
   it("maxTotalExpansions counts external entity expansions too", function () {
     const evp = new EntitiesValueParser({ default: true, external: true, maxTotalExpansions: 2 });
     evp.addEntity("e", "x");
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     expect(() => parser.parse("<root>&e;&e;&e;</root>")).toThrowError(
@@ -560,7 +561,7 @@ describe("Security — Billion Laughs mitigation", function () {
 
   it("entity values containing '&' are silently discarded (no recursive expansion)", function () {
     const evp = new EntitiesValueParser({ default: true });
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
@@ -578,7 +579,7 @@ describe("Security — Billion Laughs mitigation", function () {
 
   it("flat repetition attack is caught by maxTotalExpansions", function () {
     const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 100 });
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
@@ -599,7 +600,7 @@ describe("Per-parse isolation", function () {
 
   it("expansion counters reset between parses — second parse should not carry over", function () {
     const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 5 });
-    const builder = new CompactObjBuilder();
+    const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
       doctypeOptions: { enabled: true },
