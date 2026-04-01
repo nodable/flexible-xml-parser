@@ -22,9 +22,9 @@ const withDocType = (entities, body) => {
 
 // Helper: build a parser with a custom EntitiesValueParser configuration.
 // Keeps test bodies concise — callers only specify what they care about.
-const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}) => {
+const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}, builderOpts = {}) => {
   const evp = new EntitiesValueParser({ default: true, ...entitiesOpts });
-  const builder = new CompactBuilderFactory();
+  const builder = new CompactBuilderFactory(builderOpts);
   builder.registerValueParser("entity", evp);
   return new XMLParser({
     ...parserOpts,
@@ -135,7 +135,11 @@ describe("DOCTYPE — doctypeOptions.enabled flag", function () {
       expect(result.root.b).toBe(42);
       expect(result.root.c).toBe(42);
     },
-    () => makeParser({ enabled: true })
+    () => makeParser({ enabled: true }, {}, {}, {
+      tags: {
+        valueParsers: ["entity", "number"]
+      }
+    })
   );
 
   runAcrossAllInputSourcesWithFactory(
@@ -468,7 +472,11 @@ describe("Security — maxEntitySize", function () {
     (result) => {
       expect(result.root).toBe(1234567890);
     },
-    () => makeParser({ enabled: true, maxEntitySize: 10 })
+    () => makeParser({ enabled: true, maxEntitySize: 10 }, {}, {}, {
+      tags: {
+        valueParsers: ["entity", "number"]
+      }
+    })
   );
 
 });
@@ -538,7 +546,15 @@ describe("Security — maxExpandedLength", function () {
     (result) => {
       expect(result.root).toBe(123456789); // numeric coercion
     },
-    () => makeParser({ enabled: true }, { maxExpandedLength: 15 })
+    () => makeParser(
+      { enabled: true },
+      { maxExpandedLength: 15 },
+      {},
+      {
+        tags: {
+          valueParsers: ["entity", "number"] //change sequence
+        }
+      })
   );
 
   runAcrossAllInputSourcesWithFactory(

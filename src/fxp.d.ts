@@ -1,3 +1,5 @@
+import { BaseOutputBuilderFactory } from "@solothought/base-output-builder"
+
 /**
  * Flex XML Parser — TypeScript Definitions
  */
@@ -51,12 +53,6 @@ export interface AttributeOptions {
   prefix?: string;
   /** Suffix appended to attribute names in output. Default: '' */
   suffix?: string;
-  /**
-   * Value parser chain for attribute values.
-   * Built-in names: 'entity', 'number', 'boolean', 'trim', 'currency'.
-   * Default: ['entity', 'number', 'boolean']
-   */
-  valueParsers?: Array<string | ValueParser>;
 }
 
 /**
@@ -129,37 +125,17 @@ export interface TagOptions {
    * ]
    */
   stopNodes?: Array<string | StopNodeEntry>;
-  /**
-   * Value parser chain for tag text content.
-   * Built-in names: 'entity', 'boolean', 'number', 'trim', 'currency'.
-   * Default: ['entity', 'boolean', 'number']
-   * Add 'trim' to strip leading/trailing whitespace (not done by default).
-   */
-  valueParsers?: Array<string | ValueParser>;
 }
-
-/**
- * A custom entity map: keys are entity names (without & and ;),
- * values are replacement strings.
- * @example { 'copy': '©', 'trade': '™' }
- */
-export type EntityMap = Record<string, string>;
 
 /**
  * Options for DOCTYPE reading — controls whether entities are collected
  * and enforces read-time security limits.
- *
- * Replacement-time configuration (which entity tables are active, expansion
- * limits) belongs to EntitiesValueParser, not here.
  */
 export interface DoctypeOptions {
   /**
    * Whether to collect entities declared in the DOCTYPE internal subset and
    * forward them to the output builder for replacement.
    * The DOCTYPE block is always read to consume it; this flag controls forwarding.
-   * Also requires 'entity' in the output builder's valueParsers chain.
-   *   false (default) → entities discarded
-   *   true            → entities collected and forwarded to the output builder
    */
   enabled?: boolean;
 
@@ -176,54 +152,6 @@ export interface DoctypeOptions {
    * Default: 10000
    */
   maxEntitySize?: number;
-}
-
-/**
- * Constructor options for EntitiesValueParser.
- * Controls which entity tables are active and replacement-time security limits.
- */
-export interface EntitiesValueParserOptions {
-  /**
-   * Built-in XML entities: lt, gt, apos, quot, amp.
-   *   true (default) → use built-in set
-   *   false / null   → disable XML entity replacement entirely
-   *   EntityMap      → use this custom map instead of the built-in set
-   */
-  default?: boolean | null | EntityMap;
-
-  /**
-   * HTML named entities: &nbsp;, &copy;, &reg;, numeric refs, etc.
-   *   false / null (default) → disabled
-   *   true                   → use built-in HTML entity set
-   *   EntityMap              → use this custom map instead of the built-in set
-   */
-  html?: boolean | null | EntityMap;
-
-  /**
-   * Whether entities registered via addEntity() are applied during replacement.
-   *   true (default) → applied
-   *   false / null   → stored but not applied
-   */
-  external?: boolean | null;
-
-  /**
-   * Max total entity references expanded per document.
-   * Protects against Billion Laughs style attacks.
-   * Default: 0 (unlimited)
-   */
-  maxTotalExpansions?: number;
-
-  /**
-   * Max total characters added to output by entity expansion per document.
-   * Default: 0 (unlimited)
-   */
-  maxExpandedLength?: number;
-
-  /**
-   * Initial external entity map loaded at construction time.
-   * @example { copy: '©', trade: '™' }
-   */
-  entities?: EntityMap;
 }
 
 // ─── Error handling ────────────────────────────────────────────────────────────
@@ -379,18 +307,6 @@ export interface LimitsOptions {
 }
 
 /**
- * A value parser transforms a value in the parsing chain.
- * Receives the current value and an optional context object.
- */
-export interface ValueParser {
-  /**
-   * @param val     Current value (string initially; may already be typed if earlier parsers ran)
-   * @param context { tagName, isAttribute, attrName? }
-   */
-  parse(val: any, context?: { tagName: string; isAttribute: boolean; attrName?: string }): any;
-}
-
-/**
  * Buffer options for the feed()/end() and parseStream() input APIs.
  * Passed as `feedable` inside XMLParser options.
  */
@@ -438,8 +354,7 @@ export interface X2jOptions {
   // --- DOCTYPE parsing ---
   /**
    * Controls whether DOCTYPE entities are collected and read-time security limits.
-   * Replacement behaviour (which entity tables, expansion limits) is configured
-   * on EntitiesValueParser directly.
+   * Once collected will be passed to Output builder to take any decision
    */
   doctypeOptions?: DoctypeOptions;
 
@@ -480,7 +395,7 @@ export interface X2jOptions {
 
   // --- output builder ---
   /** Pluggable output builder instance. Default: CompactObjBuilder */
-  OutputBuilder?: OutputBuilderFactory | null;
+  OutputBuilder?: BaseOutputBuilderFactory;
 
   /**
    * Callback fired by `NodeTreeBuilder` and `CompactObjBuilder` whenever a stop node
@@ -513,40 +428,6 @@ export interface X2jOptions {
   ) => void;
 }
 
-export interface OutputBuilderFactory {
-  getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
-  registerValueParser(name: string, parser: ValueParser): void;
-}
-
-export interface OutputBuilderInstance {
-  addElement(tag: { name: string }, matcher: any): void;
-  closeElement(matcher: any): void;
-  addValue(text: string, matcher: any): void;
-  addAttribute(name: string, value: any): void;
-  addComment(text: string): void;
-  addLiteral(text: string): void;
-  addDeclaration(): void;
-  addInstruction(name: string): void;
-  /**
-   * Called by the XML parser after the DOCTYPE block is read.
-   * Implementations forward entities to any registered value parser
-   * that implements addInputEntities().
-   */
-  addInputEntities(entities: object): void;
-  getOutput(): any;
-  registeredValParsers: Record<string, ValueParser>;
-  /**
-   * Optional hook called by the parser when a stop node is fully collected.
-   * Implement this in custom OutputBuilder classes to handle stop-node content.
-   * `NodeTreeBuilder` and `CompactObjBuilder` implement it and delegate to the
-   * `options.onStopNode` callback when supplied.
-   */
-  onStopNode?(
-    tagDetail: { name: string; line: number; col: number; index: number },
-    rawContent: string,
-    matcher: any,
-  ): void;
-}
 
 export default class XMLParser {
   /**
@@ -612,122 +493,6 @@ export default class XMLParser {
 
 export { XMLParser };
 
-export class CompactObjBuilder implements OutputBuilderFactory {
-  constructor(options?: Partial<X2jOptions>);
-  getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
-  registerValueParser(name: string, parser: ValueParser): void;
-}
-
-// ─── Base Output Builder ───────────────────────────────────────────────────────
-
-/**
- * Constants for the `elementType` field in a value-parser context object.
- * Discriminates between tag text values and attribute values.
- */
-export declare const ElementType: {
-  readonly TAG: 'ELEMENT';
-  readonly ATTRIBUTE: 'ATTRIBUTE';
-};
-
-/**
- * Abstract base class for custom output builders.
- * Extend this to implement a fully custom output representation.
- *
- * Subclasses must implement: `addTag`, `closeTag`, `addValue`, `getOutput`.
- * Optionally override: `addAttribute`, `addComment`, `addCdata`, `addPi`,
- * `addDeclaration`, `onStopNode`.
- *
- * @example
- * import { BaseOutputBuilder } from 'flex-xml-parser';
- * class MyBuilder extends BaseOutputBuilder { ... }
- */
-export declare class BaseOutputBuilder implements OutputBuilderInstance {
-  constructor(readonlyMatcher?: any);
-  addAttribute(name: string, value: any, matcher: any): void;
-  parseValue(val: any, valParsers: Array<string | ValueParser>, context?: object): any;
-  addComment(text: string): void;
-  addLiteral(text: string): void;
-  addRawValue(text: string): void;
-  addDeclaration(): void;
-  addInstruction(name: string): void;
-  /**
-   * Receive DOCTYPE entities from the XML parser and forward them to any
-   * registered value parser that implements addInputEntities().
-   * Called automatically — no manual wiring needed.
-   */
-  addInputEntities(entities: object): void;
-  addElement(tag: { name: string }, matcher: any): void;
-  closeElement(matcher: any): void;
-  addValue(text: string, matcher: any): void;
-  getOutput(): any;
-  registeredValParsers: Record<string, ValueParser>;
-  onStopNode?(
-    tagDetail: { name: string; line: number; col: number; index: number },
-    rawContent: string,
-    matcher: any,
-  ): void;
-}
-
-// ─── Additional Value Parsers ──────────────────────────────────────────────────
-
-/**
- * Extended boolean parser that also maps "yes"/"no"/"1"/"0" to booleans.
- * Works on scalar strings and arrays of strings.
- */
-export declare function booleanParserExt(val: string | string[]): boolean | string | (boolean | string)[];
-
-/**
- * Join parser — joins an array of values into a single string.
- * @param val  Array of values to join.
- * @param by   Separator string. Default: `' '`
- */
-export declare function joinParser(val: any[], by?: string): string | any[];
-
-// ─── Entity parsing ────────────────────────────────────────────────────────────
-
-/**
- * Low-level entity replacement engine.
- * Holds entity tables (XML built-ins, HTML built-ins, external, DOCTYPE)
- * and performs replacement with optional security limits.
- *
- * Most users should use EntitiesValueParser instead, which wraps this class
- * and implements the ValueParser interface.
- */
-export declare class EntitiesParser {
-  constructor(options?: EntitiesValueParserOptions);
-  addExternalEntities(map: EntityMap): void;
-  addExternalEntity(key: string, val: string): void;
-  /** Load DOCTYPE entities and reset per-document expansion counters. */
-  addInputEntities(entities: object): void;
-  replaceEntitiesValue(val: string): string;
-  parse(val: string): string;
-}
-
-/**
- * Value parser that expands entity references in tag text and attribute values.
- *
- * Register an instance under 'entity' on an output builder:
- * ```ts
- * const evp = new EntitiesValueParser({ default: true, html: false });
- * myBuilder.registerValueParser('entity', evp);
- * ```
- *
- * External entities are registered directly on the instance:
- * ```ts
- * evp.addEntity('copy', '©');
- * ```
- *
- * DOCTYPE entities are forwarded automatically by the output builder —
- * no manual wiring needed.
- */
-export declare class EntitiesValueParser implements ValueParser {
-  constructor(options?: EntitiesValueParserOptions);
-  /** Register a custom entity. Key must not contain '&' or ';'. */
-  addEntity(key: string, value: string): void;
-  /** Receive DOCTYPE entities from the output builder. Resets per-document counters. */
-  addInputEntities(entities: object): void;
-  parse(val: any, context?: object): any;
-}
 
 // ─── Stop-node utilities ───────────────────────────────────────────────────────
 

@@ -40,20 +40,24 @@ describe("Value Parsers", function () {
     expect(result.root.notBoolean).toBe("maybe");
   });
 
-  it("should NOT trim values by default", function () {
+  it("should NOT trim values if 'trim' is not in valueParsers", function () {
     const xmlData = `
       <root>
         <tag>  padded  </tag>
       </root>`;
 
-    const parser = new XMLParser();
+    const parser = new XMLParser({
+      OutputBuilder: new CompactBuilderFactory({
+        tags: { valueParsers: ['boolean', 'number'] },
+      })
+    });
     const result = parser.parse(xmlData);
 
     // No 'trim' in the default chain — whitespace is preserved
     expect(result.root.tag).toBe("  padded  ");
   });
 
-  it("should trim values when 'trim' is added to valueParsers", function () {
+  it("should trim values by default", function () {
     const xmlData = `
       <root>
         <tag>  trimmed  </tag>
