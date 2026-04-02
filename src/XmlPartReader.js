@@ -118,7 +118,7 @@ export function readPiExp(parser) {
   }
 
   const exp = parser.source.readStr(i);
-  parser.source.updateBufferBoundary(i + 1);
+  parser.source.updateBufferBoundary(i + 2);
   return buildTagExpObj(exp, parser);
 }
 
