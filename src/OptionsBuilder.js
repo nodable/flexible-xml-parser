@@ -209,7 +209,9 @@ export const buildOptions = function (options) {
     finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map((entry) => {
       // Case 1: plain string shorthand
       if (typeof entry === 'string') {
-        return { expression: entry, nested: false, skipEnclosures: [] };
+        if (entry.length === 0) throw new ParseError("Stop node expression cannot be empty", ErrorCode.INVALID_INPUT);
+
+        return { expression: new Expression(entry), nested: false, skipEnclosures: [] };
       }
 
       // Case 2: object form
@@ -221,6 +223,13 @@ export const buildOptions = function (options) {
 
         // Case 2b: config object { expression, nested?, skipEnclosures? }
         if (entry.expression !== undefined) {
+          if (typeof entry.expression === 'string') {
+            if (entry.expression.length === 0) throw new ParseError("Stop node expression cannot be empty", ErrorCode.INVALID_INPUT);
+            entry.expression = new Expression(entry.expression);
+          } else if (!(entry.expression instanceof Expression)) {
+            throw new ParseError("Stop node expression must be a string or Expression instance", ErrorCode.INVALID_INPUT);
+          }
+
           return {
             expression: entry.expression,
             nested: entry.nested === true,
