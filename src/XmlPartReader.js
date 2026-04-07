@@ -18,12 +18,18 @@ export { flushAttributes } from './AttributeProcessor.js';
  */
 export function readClosingTagName(source) {
   source.markTokenStart(1);
-  let text = "";
+  let i = 0;
+  const start = source.startIndex;
   while (source.canRead()) {
     const ch = source.readCh();
-    if (ch === ">") return text.trimEnd();
-    else text += ch;// TODO: check for performance improvement
+    if (ch === ">") {
+      const str = source.readStr(i, start);
+      if (str) return str.trimEnd();
+      else return "";
+    } else i++;
   }
+
+  const text = source.readStr(i, start);
   throw new ParseError(`Unexpected end of source reading closing tag '</${text}'`, ErrorCode.UNEXPECTED_END);
 }
 
