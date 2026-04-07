@@ -4,6 +4,39 @@ import { BaseOutputBuilderFactory } from "@solothought/base-output-builder"
  * Flex XML Parser — TypeScript Definitions
  */
 
+/**
+ * Object form of a skip-tag entry — allows per-node control of nested depth
+ * tracking and enclosure skipping when scanning for the closing tag.
+ *
+ * ```ts
+ * import { xmlEnclosures } from 'flex-xml-parser';
+ *
+ * const parser = new XMLParser({
+ *   skip: {
+ *     tags: [
+ *       "..secret",
+ *       { expression: "root.internal", nested: true, skipEnclosures: [...xmlEnclosures] },
+ *     ]
+ *   }
+ * });
+ * ```
+ */
+export interface SkipTagEntry {
+  /** Path expression (same syntax as string skip-tag entries). */
+  expression: string;
+  /**
+   * When true, nested same-name open tags are tracked and the skip ends only
+   * when the outermost closing tag is found. Default: false.
+   */
+  nested?: boolean;
+  /**
+   * Enclosure pairs to skip while scanning for the closing tag.
+   * Checked in array order — first open match wins.
+   * Defaults to `[]` (plain first-match, no enclosure awareness).
+   */
+  skipEnclosures?: Enclosure[];
+}
+
 export interface SkipOptions {
   /** Skip XML declaration `<?xml ... ?>` from output. Default: false */
   declaration?: boolean;
@@ -21,8 +54,30 @@ export interface SkipOptions {
    * Default: false
    */
   nsPrefix?: boolean;
-  /** (future) Tag-level filtering — not yet implemented. Default: false */
-  tags?: boolean;
+  /**
+   * Tag paths whose entire subtree is silently dropped from output.
+   * The parser advances past the closing tag using the same raw-collection
+   * mechanism as stop nodes, then discards the content without calling
+   * any output builder methods.
+   *
+   * Each entry is either:
+   *   - A plain string path expression — equivalent to `{ expression, nested: false, skipEnclosures: [] }`.
+   *     The very first `</tagName>` ends collection.
+   *   - A `SkipTagEntry` object with optional `nested` and `skipEnclosures`.
+   *
+   * Supports path-expression-matcher syntax. Default: []
+   *
+   * @example
+   * import { xmlEnclosures } from 'flex-xml-parser';
+   *
+   * skip: {
+   *   tags: [
+   *     "..secret",
+   *     { expression: "root.internal", nested: true, skipEnclosures: [...xmlEnclosures] },
+   *   ]
+   * }
+   */
+  tags?: Array<string | SkipTagEntry>;
 }
 
 export interface NameForOptions {
@@ -91,6 +146,11 @@ export interface Enclosure {
 export interface StopNodeEntry {
   /** Path expression (same syntax as string stop-node entries). */
   expression: string;
+  /**
+   * When true, nested same-name open tags are tracked and the stop node ends
+   * only when the outermost closing tag is found. Default: false.
+   */
+  nested?: boolean;
   /**
    * Enclosure pairs to skip while scanning for the closing tag.
    * Checked in array order — first open match wins.
@@ -519,4 +579,3 @@ export declare const xmlEnclosures: ReadonlyArray<Enclosure>;
  * ```
  */
 export declare const quoteEnclosures: ReadonlyArray<Enclosure>;
-

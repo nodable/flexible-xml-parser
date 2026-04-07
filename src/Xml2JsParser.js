@@ -3,7 +3,7 @@ import BufferSource from './InputSource/BufferSource.js';
 import { readTagExp, readClosingTagName, flushAttributes } from './XmlPartReader.js';
 import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
-import { Expression, Matcher } from 'path-expression-matcher';
+import { Expression, ExpressionSet, Matcher } from 'path-expression-matcher';
 import { readDocType } from './DocTypeReader.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 import AutoCloseHandler from './AutoCloseHandler.js';
@@ -44,19 +44,11 @@ export default class Xml2JsParser {
 
     this._unpairedSet = new Set(this.options.tags.unpaired);
 
-    // Pre-compile stopNodes as { expr, nested, skipEnclosures } objects.
-    // OptionsBuilder has already normalized each entry to { expression, nested, skipEnclosures }.
-    this.stopNodeExpressions = [];
-    for (const entry of this.options.tags.stopNodes) {
-      const expr = entry.expression instanceof Expression
-        ? entry.expression
-        : new Expression(entry.expression);
-      this.stopNodeExpressions.push({
-        expr,
-        nested: entry.nested,
-        skipEnclosures: entry.skipEnclosures,
-      });
-    }
+    // Reuse the sealed ExpressionSets built by OptionsBuilder.
+    // Each Expression carries its config ({ nested, skipEnclosures }) in .data.
+    // findMatch() returns the matched Expression directly — O(1) indexed lookup.
+    this.stopNodeExpressionsSet = this.options.tags.stopNodesSet ?? new ExpressionSet();
+    this.skipTagExpressionsSet = this.options.skip.tagsSet ?? new ExpressionSet();
   }
 
   initializeParser() {
@@ -227,14 +219,16 @@ export default class Xml2JsParser {
     // Re-consume the opening tag (source was rewound to its '<'), then resume
     // collection — the processor remembers all accumulated content and depth.
     if (this._stopNodeProcessor && this._stopNodeProcessor.isActive()) {
-      const { tagDetail } = this._stopNodeProcessorMeta;
+      const { tagDetail, isSkip } = this._stopNodeProcessorMeta;
       this._stopNodeProcessor.resumeAfterOpenTag();
       readTagExp(this); // re-consume the opening tag from the rewound source
       const content = this._stopNodeProcessor.collect(this.source);
-      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
-      this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
-      this.outputBuilder.addValue(content, this.readonlyMatcher);
-      this.outputBuilder.closeElement(this.readonlyMatcher);
+      if (!isSkip) {
+        this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
+        this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
+        this.outputBuilder.addValue(content, this.readonlyMatcher);
+        this.outputBuilder.closeElement(this.readonlyMatcher);
+      }
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
@@ -271,20 +265,28 @@ export default class Xml2JsParser {
       this.matcher.updateCurrent(rawAttributes);
     }
 
-    if (!this.options.skip.attributes) {
+    // Resolve skip/stop BEFORE touching the output builder
+    const stopNodeConfig = this.isStopNode();
+    const skipTagConfig = stopNodeConfig ? null : this.isSkipTag();
+
+    if (!this.options.skip.attributes && !skipTagConfig) {
       flushAttributes(tagExp._attrsExp, this);
     }
 
-    // Stop-node check AFTER attributes are set so attribute conditions work.
-    const stopNodeConfig = this.isStopNode();
+    // Stop-node and skip-tag checks AFTER attributes are set so attribute conditions work.
+    // const stopNodeConfig = this.isStopNode();
+    // Skip tag is only checked when this tag is not already a stop node — they are mutually exclusive.
+    // const skipTagConfig = stopNodeConfig ? null : this.isSkipTag();
 
     if (this.isUnpaired(processedTagName)) {
       this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
       this.outputBuilder.closeElement(this.readonlyMatcher);
       this.matcher.pop();
     } else if (tagExp.selfClosing) {
-      this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
-      this.outputBuilder.closeElement(this.readonlyMatcher);
+      if (!skipTagConfig) {
+        this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
+        this.outputBuilder.closeElement(this.readonlyMatcher);
+      }
       this.matcher.pop();
     } else if (stopNodeConfig) {
       // Create a fresh processor with the matching nested + skipEnclosures config.
@@ -292,13 +294,26 @@ export default class Xml2JsParser {
         nested: stopNodeConfig.nested,
         skipEnclosures: stopNodeConfig.skipEnclosures,
       });
-      this._stopNodeProcessorMeta = { tagDetail };
+      this._stopNodeProcessorMeta = { tagDetail, isSkip: false };
       this._stopNodeProcessor.activate();
       const content = this._stopNodeProcessor.collect(this.source);
       this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
       this.outputBuilder.onStopNode?.(tagDetail, content, this.readonlyMatcher);
       this.outputBuilder.addValue(content, this.readonlyMatcher);
       this.outputBuilder.closeElement(this.readonlyMatcher);
+      this.matcher.pop();
+      this._stopNodeProcessor = null;
+      this._stopNodeProcessorMeta = null;
+    } else if (skipTagConfig) {
+      // Skip tag: collect raw content (to advance the source past the closing tag)
+      // but call no output builder methods — the tag is silently dropped.
+      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, {
+        nested: skipTagConfig.nested,
+        skipEnclosures: skipTagConfig.skipEnclosures,
+      });
+      this._stopNodeProcessorMeta = { tagDetail, isSkip: true };
+      this._stopNodeProcessor.activate();
+      this._stopNodeProcessor.collect(this.source); // advance source; content discarded
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
@@ -398,14 +413,25 @@ export default class Xml2JsParser {
   }
 
   /**
-   * Returns the matched stop-node config `{ expr, nested, skipEnclosures }` if the
-   * current matcher position matches any stop-node expression, or `null` if not.
+   * Returns the matched stop-node config `{ nested, skipEnclosures }` (from Expression.data)
+   * if the current matcher position matches any stop-node expression, or `null` if not.
+   * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
    */
   isStopNode() {
-    for (const config of this.stopNodeExpressions) {
-      if (this.matcher.matches(config.expr)) return config;
-    }
-    return null;
+    if (this.stopNodeExpressionsSet.size === 0) return null;
+    const matched = this.stopNodeExpressionsSet.findMatch(this.matcher);
+    return matched ? matched.data : null;
+  }
+
+  /**
+   * Returns the matched skip-tag config `{ nested, skipEnclosures }` (from Expression.data)
+   * if the current matcher position matches any skip.tags expression, or `null` if not.
+   * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
+   */
+  isSkipTag() {
+    if (this.skipTagExpressionsSet.size === 0) return null;
+    const matched = this.skipTagExpressionsSet.findMatch(this.matcher);
+    return matched ? matched.data : null;
   }
 
   /**

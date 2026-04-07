@@ -1,5 +1,5 @@
 import { CompactBuilderFactory } from '@solothought/compact-builder';
-import { Expression } from 'path-expression-matcher';
+import { Expression, ExpressionSet } from 'path-expression-matcher';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 
@@ -20,7 +20,7 @@ export const defaultOptions = {
     cdata: false,         // Exclude CDATA sections from output entirely
     comment: false,       // Exclude comments from output entirely
     nsPrefix: false,      // Strip namespace prefixes (e.g. ns:tag → tag)
-    tags: false,          // (future) tag-level filtering — not yet implemented
+    tags: [],             // Tag paths to skip entirely — content is silently dropped from output
   },
 
   // --- nameFor group ---
@@ -188,66 +188,39 @@ export const buildOptions = function (options) {
     finalOptions.OutputBuilder = new CompactBuilderFactory();
   }
 
-  // Normalize stopNodes entries into { expression, nested, skipEnclosures } objects.
+  // Normalize stopNodes and skip.tags entries into Expression objects with config embedded
+  // in Expression.data as { nested, skipEnclosures }. Build a sealed ExpressionSet for
+  // O(1) hot-path matching in the parser.
   //
-  // Accepted forms:
+  // Accepted entry forms (identical for both stopNodes and skip.tags):
   //   "..script"
-  //     → { expression: "..script", nested: false, skipEnclosures: [] }
+  //     → Expression("..script", {}, { nested: false, skipEnclosures: [] })
   //
   //   Expression instance
-  //     → { expression: Expression, nested: false, skipEnclosures: [] }
+  //     → re-wrapped with { nested: false, skipEnclosures: [] } in data
   //
   //   { expression: "..script", nested?: boolean, skipEnclosures?: [] }
-  //     → { expression: "..script", nested: boolean, skipEnclosures: [...] }
-  //
-  //   { expression: Expression, nested?: boolean, skipEnclosures?: [] }
-  //     → { expression: Expression, nested: boolean, skipEnclosures: [...] }
+  //   { expression: Expression,  nested?: boolean, skipEnclosures?: [] }
+  //     → Expression with the given config embedded in .data
   //
   // `nested` defaults to false; `skipEnclosures` defaults to [].
   // The two flags are fully independent — any combination is valid.
   if (Array.isArray(finalOptions.tags?.stopNodes)) {
-    finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map((entry) => {
-      // Case 1: plain string shorthand
-      if (typeof entry === 'string') {
-        if (entry.length === 0) throw new ParseError("Stop node expression cannot be empty", ErrorCode.INVALID_INPUT);
+    const stopSet = new ExpressionSet();
+    finalOptions.tags.stopNodes = finalOptions.tags.stopNodes.map(
+      (entry) => normalizeTagEntry(entry, 'stopNodes', stopSet)
+    );
+    stopSet.seal();
+    finalOptions.tags.stopNodesSet = stopSet;
+  }
 
-        return { expression: new Expression(entry), nested: false, skipEnclosures: [] };
-      }
-
-      // Case 2: object form
-      if (entry && typeof entry === 'object') {
-        // Case 2a: bare Expression instance — no extra options
-        if (entry instanceof Expression) {
-          return { expression: entry, nested: false, skipEnclosures: [] };
-        }
-
-        // Case 2b: config object { expression, nested?, skipEnclosures? }
-        if (entry.expression !== undefined) {
-          if (typeof entry.expression === 'string') {
-            if (entry.expression.length === 0) throw new ParseError("Stop node expression cannot be empty", ErrorCode.INVALID_INPUT);
-            entry.expression = new Expression(entry.expression);
-          } else if (!(entry.expression instanceof Expression)) {
-            throw new ParseError("Stop node expression must be a string or Expression instance", ErrorCode.INVALID_INPUT);
-          }
-
-          return {
-            expression: entry.expression,
-            nested: entry.nested === true,
-            skipEnclosures: Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [],
-          };
-        }
-
-        throw new ParseError(
-          "Each stopNodes object entry must have an 'expression' property or be an Expression instance.",
-          ErrorCode.INVALID_INPUT,
-        );
-      }
-
-      throw new ParseError(
-        `Invalid stopNodes entry: expected a string, Expression, or { expression, nested?, skipEnclosures? } object.`,
-        ErrorCode.INVALID_INPUT,
-      );
-    });
+  if (Array.isArray(finalOptions.skip?.tags)) {
+    const skipSet = new ExpressionSet();
+    finalOptions.skip.tags = finalOptions.skip.tags.map(
+      (entry) => normalizeTagEntry(entry, 'skip.tags', skipSet)
+    );
+    skipSet.seal();
+    finalOptions.skip.tagsSet = skipSet;
   }
 
   if (finalOptions.onDangerousProperty === null) {
@@ -310,10 +283,62 @@ function resolveAutoClose(raw, opts) {
   return null;
 }
 
+/**
+ * Normalize one entry from `tags.stopNodes` or `skip.tags` into an Expression
+ * whose `.data` carries `{ nested, skipEnclosures }`, and register it in `set`.
+ *
+ * Accepted forms:
+ *   string                                      → bare pattern, defaults applied
+ *   Expression instance                         → re-wrapped with defaults
+ *   { expression: string|Expression, nested?, skipEnclosures? }
+ *
+ * @param {string|Expression|object} entry
+ * @param {string} optionName  - Used in error messages ("stopNodes" or "skip.tags")
+ * @param {ExpressionSet} set  - The set to register the resulting Expression into
+ * @returns {Expression}
+ */
+function normalizeTagEntry(entry, optionName, set) {
+  let pattern, nested, skipEnclosures;
+
+  if (typeof entry === 'string') {
+    if (entry.length === 0) throw new ParseError(`${optionName} expression cannot be empty`, ErrorCode.INVALID_INPUT);
+    pattern = entry;
+    nested = false;
+    skipEnclosures = [];
+  } else if (entry instanceof Expression) {
+    // Bare Expression — keep its pattern, apply defaults for missing data fields
+    pattern = entry.toString();
+    nested = entry.data?.nested ?? false;
+    skipEnclosures = entry.data?.skipEnclosures ?? [];
+  } else if (entry && typeof entry === 'object' && entry.expression !== undefined) {
+    const raw = entry.expression;
+    if (typeof raw === 'string') {
+      if (raw.length === 0) throw new ParseError(`${optionName} expression cannot be empty`, ErrorCode.INVALID_INPUT);
+      pattern = raw;
+    } else if (raw instanceof Expression) {
+      pattern = raw.toString();
+    } else {
+      throw new ParseError(`${optionName} expression must be a string or Expression instance`, ErrorCode.INVALID_INPUT);
+    }
+    nested = entry.nested === true;
+    skipEnclosures = Array.isArray(entry.skipEnclosures) ? entry.skipEnclosures : [];
+  } else {
+    throw new ParseError(
+      `Invalid ${optionName} entry: expected a string, Expression, or { expression, nested?, skipEnclosures? } object.`,
+      ErrorCode.INVALID_INPUT,
+    );
+  }
+
+  const expr = new Expression(pattern, {}, { nested, skipEnclosures });
+  set.add(expr);
+  return expr;
+}
+
 function deepClone(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(deepClone);
-  if (obj instanceof RegExp) return obj;   // ← guard
+  if (obj instanceof RegExp) return obj;     // ← guard
+  if (obj instanceof Expression) return obj; // ← guard — Expression instances are immutable
   const clone = {};
   for (const key of Object.keys(obj)) {
     clone[key] = typeof obj[key] === 'function' ? obj[key] : deepClone(obj[key]);
