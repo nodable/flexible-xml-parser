@@ -30,6 +30,7 @@ export function readClosingTagName(source) {
   }
 
   const text = source.readStr(i, start);
+  source.updateBufferBoundary(i);
   throw new ParseError(`Unexpected end of source reading closing tag '</${text}'`, ErrorCode.UNEXPECTED_END);
 }
 
