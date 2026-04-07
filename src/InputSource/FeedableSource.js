@@ -231,6 +231,15 @@ export default class FeedableSource {
     throw new ParseError(`Unexpected end of source reading '${stopStr}'`, ErrorCode.UNEXPECTED_END);
   }
 
+  // StringSource / FeedableSource
+  readUptoChar(stopChar) {
+    const i = this.buffer.indexOf(stopChar, this.startIndex);
+    if (i === -1) throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
+    const result = this.buffer.substring(this.startIndex, i);
+    this.startIndex = i + 1;
+    return result;
+  }
+
   /**
    * Read until a closing tag is found (used for stop nodes).
    * @param {string} stopStr  e.g. `"</tagname"`

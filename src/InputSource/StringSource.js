@@ -138,6 +138,14 @@ export default class StringSource {
     throw new ParseError(`Unexpected end of source reading '${stopStr}'`, ErrorCode.UNEXPECTED_END);
   }
 
+  readUptoChar(stopChar) {
+    const i = this.buffer.indexOf(stopChar, this.startIndex);
+    if (i === -1) throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
+    const result = this.buffer.substring(this.startIndex, i);
+    this.startIndex = i + 1;
+    return result;
+  }
+
   readUptoCloseTag(stopStr) { // stopStr: "</tagname"
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;

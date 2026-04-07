@@ -310,7 +310,7 @@ function readEntityExp(parser) {
     }
 
     // readUpto throws UNEXPECTED_END automatically if ">" is not in the buffer yet
-    source.readUpto(">");
+    source.readUptoChar(">");
 
     return [entityName, entityValue];
 }
@@ -368,7 +368,7 @@ function readElementExp(parser) {
         if (peek5 === "EMPTY") {
             source.updateBufferBoundary(5);
         } else {
-            source.readUpto(">");
+            source.readUptoChar(">");
             return { elementName, contentModel: "" };
         }
     } else if (peek1 === "A") {
@@ -381,15 +381,15 @@ function readElementExp(parser) {
         if (peek3 === "ANY") {
             source.updateBufferBoundary(3);
         } else {
-            source.readUpto(">");
+            source.readUptoChar(">");
             return { elementName, contentModel: "" };
         }
     } else if (peek1 === "(") {
         source.updateBufferBoundary(1);
-        source.readUpto(")");
+        source.readUptoChar(")");
     }
 
-    source.readUpto(">");
+    source.readUptoChar(">");
     return { elementName };
 }
 
@@ -398,7 +398,7 @@ function readElementExp(parser) {
  * "<!ATTLIST" has already been consumed by the caller.
  */
 function readAttlistExp(parser) {
-    parser.source.readUpto(">");
+    parser.source.readUptoChar(">");
 }
 
 /**
@@ -466,7 +466,7 @@ function readNotationExp(parser) {
         );
     }
 
-    source.readUpto(">");
+    source.readUptoChar(">");
 }
 
 /**
@@ -490,7 +490,7 @@ function readIdentifierVal(source, type) {
     }
     source.updateBufferBoundary(1);
     // readUpto throws UNEXPECTED_END automatically when the closing quote is absent
-    let value = source.readUpto(startChar);
+    let value = source.readUptoChar(startChar);
     return [value];
 }
 
