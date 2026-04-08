@@ -1,7 +1,7 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { collectRawAttributes } from './AttributeProcessor.js';
-
+import { isName } from "./util.js"
 // Re-export flushAttributes so Xml2JsParser and XmlSpecialTagsReader can
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
@@ -168,6 +168,10 @@ function buildTagExpObj(exp, parser) {
   if (tagExp.tagName.length === 0 && i === expLen) tagExp.tagName = exp;
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
+
+  if (!isName(tagExp.tagName)) {
+    throw new ParseError("Invalid tag name", ErrorCode.INVALID_TAG_NAME);
+  }
 
   // Pass 1: collect raw attribute values for matcher.updateCurrent().
   // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent().
