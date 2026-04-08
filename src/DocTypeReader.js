@@ -251,13 +251,14 @@ function readEntityExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    // Read entity name — stops at whitespace or opening quote
-    let entityName = "";
+    const entityNameStart = source.startIndex;
+    let entityNameLen = 0;
     while (source.canRead()) {
-        let ch = source.readChAt(0);
-        if (/\s/.test(ch) || ch === '"' || ch === "'") break;
-        entityName += source.readCh();
+        const ch = source.readCh();
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '"' || ch === "'") break;
+        entityNameLen++;
     }
+    const entityName = source.readStr(entityNameLen, entityNameStart);
 
     // Ran out mid-name without hitting a terminator — wait for more data
     if (!source.canRead()) {
@@ -330,12 +331,14 @@ function readElementExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    let elementName = "";
+    const elementNameStart = source.startIndex;
+    let elementNameLen = 0;
     while (source.canRead()) {
-        let ch = source.readChAt(0);
-        if (/\s/.test(ch)) break;
-        elementName += source.readCh();
+        const ch = source.readCh();
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') break;
+        elementNameLen++;
     }
+    const elementName = source.readStr(elementNameLen, elementNameStart);
 
     if (!source.canRead()) {
         throw new ParseError(`Unexpected end of source after ELEMENT name "${elementName}"`,
@@ -416,12 +419,14 @@ function readNotationExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    let notationName = "";
+    const notationNameStart = source.startIndex;
+    let notationNameLen = 0;
     while (source.canRead()) {
-        let ch = source.readChAt(0);
-        if (/\s/.test(ch)) break;
-        notationName += source.readCh();
+        const ch = source.readCh();
+        if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') break;
+        notationNameLen++;
     }
+    const notationName = source.readStr(notationNameLen, notationNameStart);
 
     if (!source.canRead()) {
         throw new ParseError(`Unexpected end of source after NOTATION name "${notationName}"`,
@@ -500,9 +505,10 @@ function readIdentifierVal(source, type) {
 
 function skipSourceWhitespace(source) {
     while (source.canRead()) {
-        let ch = source.readChAt(0);
-        if (!/\s/.test(ch)) break;
-        source.readCh();
+        const ch = source.readChAt(0);
+        if (ch !== ' ' && ch !== '\t' && ch !== '\n' && ch !== '\r') break;
+        //source.readCh();
+        source.updateBufferBoundary(1)
     }
 }
 

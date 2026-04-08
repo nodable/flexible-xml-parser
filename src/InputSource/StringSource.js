@@ -138,9 +138,19 @@ export default class StringSource {
     throw new ParseError(`Unexpected end of source reading '${stopStr}'`, ErrorCode.UNEXPECTED_END);
   }
 
+  /**
+   * Single-character variant of readUpto — faster because there is no inner
+   * match loop.  Reads until `stopChar` is found, consumes it, and returns
+   * the text before it.
+   *
+   * @param {string} stopChar  Exactly one character.
+   * @returns {string}
+   */
   readUptoChar(stopChar) {
     const i = this.buffer.indexOf(stopChar, this.startIndex);
-    if (i === -1) throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
+    if (i === -1) {
+      throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
+    }
     const result = this.buffer.substring(this.startIndex, i);
     this.startIndex = i + 1;
     return result;
@@ -149,23 +159,30 @@ export default class StringSource {
   readUptoCloseTag(stopStr) { // stopStr: "</tagname"
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;
-    let stopIndex = 0;
-    // 0: non-matching, 1: tag-name matched (scanning for '>'), 2: full match
-    let match = 0;
+    let tagMatchStart = -1;
+    // 0: scanning, 1: tag-name matched (scanning for '>'), 2: full match
+    let state = 0;
 
     for (let i = this.startIndex; i < inputLength; i++) {
-      if (match === 1) {
-        if (stopIndex === 0) stopIndex = i;
-        if (this.buffer[i] === ' ' || this.buffer[i] === '\t') continue;
-        else if (this.buffer[i] === '>') match = 2;
+      if (state === 1) {
+        const c = this.buffer[i];
+        if (c === ' ' || c === '\t') continue;
+        if (c === '>') { state = 2; }
+        else { state = 0; tagMatchStart = -1; } // false match e.g. </scriptX>
       } else {
-        match = 1;
+        // Try to match stopStr at position i
+        let matched = true;
         for (let j = 0; j < stopLength; j++) {
-          if (this.buffer[i + j] !== stopStr[j]) { match = 0; break; }
+          if (this.buffer[i + j] !== stopStr[j]) { matched = false; break; }
+        }
+        if (matched) {
+          state = 1;
+          tagMatchStart = i;
+          i += stopLength - 1; // skip past matched string
         }
       }
-      if (match === 2) {
-        const result = this.buffer.substring(this.startIndex, stopIndex - 1);
+      if (state === 2) {
+        const result = this.buffer.substring(this.startIndex, tagMatchStart);
         this.startIndex = i + 1;
         return result;
       }
