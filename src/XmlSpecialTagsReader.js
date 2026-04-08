@@ -32,6 +32,7 @@ export function readCdata(parser) {
 }
 
 export function readPiTag(parser) {
+  const skipOptions = parser.options.skip;
   parser.source.markTokenStart(1);
   //<? already consumed
   let tagExp = readPiExp(parser, "?>");
@@ -45,16 +46,16 @@ export function readPiTag(parser) {
   // so addDeclaration() / addInstruction() pick them up, mirroring what readOpeningTag
   // does for regular tags. PI tags are not pushed onto the matcher, so no
   // updateCurrent() call is needed here.
-  if (!parser.options.skip.attributes) {
+  if (!skipOptions.attributes) {
     flushAttributes(tagExp._attrsExp, parser);
   }
 
   if (tagExp.tagName === "xml") {
     //TODO: verify it is very first tag else error
-    if (!parser.options.skip.declaration) {
+    if (!skipOptions.declaration) {
       parser.outputBuilder.addDeclaration("?xml");
     }
-  } else if (!parser.options.skip.pi) {
+  } else if (!skipOptions.pi) {
     parser.outputBuilder.addInstruction("?" + tagExp.tagName);
   }
 }

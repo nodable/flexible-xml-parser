@@ -228,6 +228,7 @@ export default class Xml2JsParser {
   }
 
   readOpeningTag() {
+    const options = this.options;
     this.addTextNode();
 
     // ── Stop-node resume ─────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ export default class Xml2JsParser {
     );
 
     // ── Limit: maxNestedTags ─────────────────────────────────────────────────
-    const maxNested = this.options.limits?.maxNestedTags;
+    const maxNested = options.limits?.maxNestedTags;
     if (maxNested !== undefined && maxNested !== null) {
       const depth = this.tagsStack.length + 1;
       if (depth > maxNested) {
@@ -287,7 +288,7 @@ export default class Xml2JsParser {
     const stopNodeConfig = this.isStopNode();
     const skipTagConfig = stopNodeConfig ? null : this.isSkipTag();
 
-    if (!this.options.skip.attributes && !skipTagConfig) {
+    if (!options.skip.attributes && !skipTagConfig) {
       flushAttributes(tagExp._attrsExp, this);
     }
 
@@ -405,21 +406,24 @@ export default class Xml2JsParser {
   }
 
   processAttrName(attrName) {
-    attrName = resolveNsPrefix(attrName, this.options.skip.nsPrefix);
-    attrName = sanitizeName(attrName, this.options.onDangerousProperty);
-    if (this.options.strictReservedNames && attrName === this.options.attributes.groupBy) {
+    const options = this.options;
+    attrName = resolveNsPrefix(attrName, options.skip.nsPrefix);
+    attrName = sanitizeName(attrName, options.onDangerousProperty);
+    if (options.strictReservedNames && attrName === options.attributes.groupBy) {
       throw new ParseError(`Restricted attribute name: ${attrName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
     }
     return attrName;
   }
 
   processTagName(tagName) {
-    tagName = resolveNsPrefix(tagName, this.options.skip.nsPrefix);
-    tagName = sanitizeName(tagName, this.options.onDangerousProperty);
-    if (this.options.strictReservedNames && (
-      tagName === this.options.nameFor.comment ||
-      tagName === this.options.nameFor.cdata ||
-      tagName === this.options.nameFor.text
+    const options = this.options;
+    const nameFor = options.nameFor;
+    tagName = resolveNsPrefix(tagName, options.skip.nsPrefix);
+    tagName = sanitizeName(tagName, options.onDangerousProperty);
+    if (options.strictReservedNames && (
+      tagName === nameFor.comment ||
+      tagName === nameFor.cdata ||
+      tagName === nameFor.text
     )) {
       throw new ParseError(`Restricted tag name: ${tagName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
     }
