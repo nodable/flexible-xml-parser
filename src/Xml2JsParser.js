@@ -129,7 +129,25 @@ export default class Xml2JsParser {
           this.readOpeningTag();
         }
       } else {
-        this.tagTextData += ch;
+        // ch is already consumed. Peek ahead for more non-'<' chars and grab
+        // the whole run in one readStr call rather than concatenating one char
+        // at a time through every loop iteration.
+        let runLen = 0;
+        while (true) {
+          const c = this.source.readChAt(runLen);
+          if (c === '<' || c === undefined || c === '') break;
+          runLen++;
+        }
+        if (runLen > 0) {
+          this.tagTextData += ch + this.source.readStr(runLen, this.source.startIndex);
+          this.source.updateBufferBoundary(runLen);
+        } else {
+          this.tagTextData += ch;
+        }
+
+        //TODO: why does below code doesn't work
+        // const text = this.source.readUptoChar("<");
+        // this.tagTextData += text;
       }
     }
   }
