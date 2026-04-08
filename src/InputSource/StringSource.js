@@ -97,7 +97,8 @@ export default class StringSource {
     }
     if (origin > 0) {
       this.buffer = this.buffer.substring(origin);
-      for (let i = 0; i < this._marks.length; i++) {
+      const marksLen = this._marks.length;
+      for (let i = 0; i < marksLen; i++) {
         if (this._marks[i] >= 0) this._marks[i] -= origin;
       }
       this.startIndex -= origin;

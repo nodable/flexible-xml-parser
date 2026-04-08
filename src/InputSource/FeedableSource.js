@@ -329,7 +329,8 @@ export default class FeedableSource {
       this.buffer = this.buffer.substring(origin);
 
       // Adjust all mark positions by the amount trimmed.
-      for (let i = 0; i < this._marks.length; i++) {
+      const marksLen = this._marks.length;
+      for (let i = 0; i < marksLen; i++) {
         if (this._marks[i] >= 0) this._marks[i] -= origin;
       }
 

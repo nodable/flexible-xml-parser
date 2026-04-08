@@ -139,7 +139,8 @@ export default class AutoCloseHandler {
     const stackSnapshot = [...tagsStack, currentTagDetail];
 
     let matchIndex = -1;
-    for (let i = stackSnapshot.length - 1; i >= 0; i--) {
+    const stackSnapshotLength = stackSnapshot.length;
+    for (let i = stackSnapshotLength - 1; i >= 0; i--) {
       if (stackSnapshot[i].name === closingTagName) {
         matchIndex = i;
         break;
@@ -160,10 +161,10 @@ export default class AutoCloseHandler {
 
     // Close everything above the match (innermost first), then signal the
     // caller to close the matched tag itself in the normal path.
-    const levelsToClose = stackSnapshot.length - 1 - matchIndex;
+    const levelsToClose = stackSnapshotLength - 1 - matchIndex;
 
     for (let i = 0; i < levelsToClose; i++) {
-      const tag = stackSnapshot[stackSnapshot.length - 1 - i];
+      const tag = stackSnapshot[stackSnapshotLength - 1 - i];
 
       this._recordError(AutoCloseErrorType.MISMATCHED_CLOSE, {
         tag: tag.name,

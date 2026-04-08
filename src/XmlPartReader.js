@@ -146,7 +146,9 @@ function buildTagExpObj(exp, parser) {
     _attrsExp: "", // stored for two-pass attribute flushing in readOpeningTag
   };
 
-  if (exp[exp.length - 1] === "/") {
+  const expLen = exp.length;
+
+  if (exp[expLen - 1] === "/") {
     tagExp.selfClosing = true;
     exp = exp.slice(0, -1); // Remove the trailing slash
   }
@@ -154,7 +156,8 @@ function buildTagExpObj(exp, parser) {
   // Separate tag name from attribute expression
   let attrsExp = "";
   let i = 0;
-  for (; i < exp.length; i++) {
+
+  for (; i < expLen; i++) {
     if (exp[i] === " ") {
       tagExp.tagName = exp.substring(0, i);
       attrsExp = exp.substring(i + 1);
@@ -162,7 +165,7 @@ function buildTagExpObj(exp, parser) {
     }
   }
   //only tag
-  if (tagExp.tagName.length === 0 && i === exp.length) tagExp.tagName = exp;
+  if (tagExp.tagName.length === 0 && i === expLen) tagExp.tagName = exp;
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
 

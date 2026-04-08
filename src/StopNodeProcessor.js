@@ -148,13 +148,15 @@ export class StopNodeProcessor {
   collect(source) {
     source.markTokenStart(1);
 
-    if (!this._nested && this._enclosures.length === 0) {
+    const enclosuresLen = this._enclosures.length;//dont inline
+
+    if (!this._nested && enclosuresLen === 0) {
       return this._collectPlain(source);
     }
-    if (this._nested && this._enclosures.length === 0) {
+    if (this._nested && enclosuresLen === 0) {
       return this._collectDepthOnly(source);
     }
-    if (!this._nested && this._enclosures.length > 0) {
+    if (!this._nested && enclosuresLen > 0) {
       return this._collectEnclosureOnly(source);
     }
     // nested && enclosures.length > 0
@@ -435,7 +437,8 @@ export class StopNodeProcessor {
    * enclosure, or -1 if none match.
    */
   _matchEnclosureOpen(source) {
-    for (let i = 0; i < this._enclosures.length; i++) {
+    const enclosuresLen = this._enclosures.length;
+    for (let i = 0; i < enclosuresLen; i++) {
       if (this._peekMatch(source, this._enclosures[i].open)) return i;
     }
     return -1;
@@ -472,7 +475,8 @@ export class StopNodeProcessor {
    * Does NOT consume.
    */
   _peekMatch(source, str) {
-    for (let i = 0; i < str.length; i++) {
+    const strLen = str.length;
+    for (let i = 0; i < strLen; i++) {
       if (source.readChAt(i) !== str[i]) return false;
     }
     return true;
