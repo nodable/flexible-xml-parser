@@ -1,5 +1,5 @@
 {
-  "name": "flexible-xml-parser",
+  "name": "@solothought/flexible-xml-parser",
   "version": "1.0.0",
   "description": "Flexible XML parser with pluggable output builders and value parsers",
   "main": "./lib/fxp.cjs",
@@ -43,7 +43,7 @@
   "dependencies": {
     "@solothought/base-output-builder": "file:../flex-output-builders/base-output-builder",
     "@solothought/compact-builder": "file:../flex-output-builders/compact-builder",
-    "path-expression-matcher": ">=1.2.0",
+    "path-expression-matcher": "^1.4.0",
     "strnum": "^2.2.2"
   },
   "devDependencies": {
@@ -65,5 +65,11 @@
     "lib",
     "src",
     "CHANGELOG.md"
+  ],
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/solothought"
+    }
   ]
 }
