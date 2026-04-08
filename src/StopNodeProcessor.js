@@ -446,16 +446,19 @@ export class StopNodeProcessor {
    * Returns the text before `stopStr`. Throws UNEXPECTED_END if input runs out.
    */
   _readUpto(source, stopStr) {
-    let text = '';
     const s0 = stopStr[0];
     const sLen = stopStr.length;
+    const start = source.startIndex;
+    let len = 0;
 
     while (source.canRead()) {
       if (source.readChAt(0) === s0 && this._peekMatch(source, stopStr)) {
+        const text = source.readStr(len, start);
         this._skipChars(source, sLen);
         return text;
       }
-      text += source.readCh();
+      source.readCh();
+      len++;
     }
 
     throw new ParseError(
@@ -508,13 +511,14 @@ export class StopNodeProcessor {
    * including the closing `>` (or `/>`).
    */
   _readTagTail(source) {
-    let attrText = '';
+    const start = source.startIndex;
+    let len = 0;
     let inSingle = false;
     let inDouble = false;
 
     while (source.canRead()) {
       const ch = source.readCh();
-      attrText += ch;
+      len++;
 
       if (ch === "'" && !inDouble) {
         inSingle = !inSingle;
@@ -522,11 +526,12 @@ export class StopNodeProcessor {
         inDouble = !inDouble;
       } else if (!inSingle && !inDouble) {
         if (ch === '>') {
-          return { selfClosing: false, attrText };
+          return { selfClosing: false, attrText: source.readStr(len, start) };
         }
         if (ch === '/' && source.canRead() && source.readChAt(0) === '>') {
-          attrText += source.readCh(); // consume '>'
-          return { selfClosing: true, attrText };
+          source.readCh(); // consume '>'
+          len++;
+          return { selfClosing: true, attrText: source.readStr(len, start) };
         }
       }
     }
@@ -543,11 +548,12 @@ export class StopNodeProcessor {
    * Preserves original spacing when reconstructing inner closing tags.
    */
   _readToAngleClose(source) {
-    let suffix = '';
+    const start = source.startIndex;
+    let len = 0;
     while (source.canRead()) {
       const ch = source.readCh();
-      suffix += ch;
-      if (ch === '>') return suffix;
+      len++;
+      if (ch === '>') return source.readStr(len, start);
       if (ch !== ' ' && ch !== '\t' && ch !== '\n' && ch !== '\r') {
         throw new ParseError(
           `Malformed closing tag for </${this._tagName}>`,
