@@ -277,10 +277,15 @@ export default class Xml2JsParser {
     }
 
     // ── Two-pass attribute handling ──────────────────────────────────────────
-    const rawAttributes = tagExp.rawAttributes || {};
+    let rawAttributes = {};
+    let raeAttrLen = 0;
+    if (tagExp.rawAttributes) {
+      rawAttributes = tagExp.rawAttributes;
+      raeAttrLen = tagExp.rawAttributesLen;
+    }
 
     this.matcher.push(processedTagName, {});
-    if (Object.keys(rawAttributes).length > 0) {
+    if (raeAttrLen > 0) {
       this.matcher.updateCurrent(rawAttributes);
     }
 

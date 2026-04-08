@@ -172,7 +172,7 @@ function buildTagExpObj(exp, parser) {
   // Pass 1: collect raw attribute values for matcher.updateCurrent().
   // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent().
   if (!parser.options.skip.attributes && attrsExp.length > 0) {
-    collectRawAttributes(attrsExp, parser, tagExp.rawAttributes);
+    collectRawAttributes(attrsExp, parser, tagExp);
   }
 
   return tagExp;

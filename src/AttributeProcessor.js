@@ -30,19 +30,22 @@ const attrsRegx = new RegExp('([^\\s=]+)\\s*(=\\s*([\'"])([\\s\\S]*?)\\3)?', 'gm
  *
  * @param {string} attrStr      - raw attribute expression substring
  * @param {object} parser       - Xml2JsParser instance (for processAttrName)
- * @param {object} rawAttributes - output map to populate (Object.create(null))
+ * @param {object} tagExp - tagExp object to populate rawAttributes (Object.create(null))
  */
-export function collectRawAttributes(attrStr, parser, rawAttributes) {
+export function collectRawAttributes(attrStr, parser, tagExp) {
+
   if (!attrStr || attrStr.length === 0) return;
   const matches = getAllMatches(attrStr, attrsRegx);
   const len = matches.length;
+  let count = 0;
   for (let i = 0; i < len; i++) {
     const attrName = parser.processAttrName(matches[i][1]);
     if (attrName === false) continue;
-
+    count++;
     const rawVal = matches[i][4];
-    rawAttributes[matches[i][1]] = rawVal !== undefined ? rawVal : true;
+    tagExp.rawAttributes[matches[i][1]] = rawVal !== undefined ? rawVal : true;
   }
+  tagExp.rawAttributesLen = count;
 }
 
 /**
