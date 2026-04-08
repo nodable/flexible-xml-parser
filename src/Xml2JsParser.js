@@ -49,12 +49,17 @@ export default class Xml2JsParser {
     // findMatch() returns the matched Expression directly — O(1) indexed lookup.
     this.stopNodeExpressionsSet = this.options.tags.stopNodesSet ?? new ExpressionSet();
     this.skipTagExpressionsSet = this.options.skip.tagsSet ?? new ExpressionSet();
+
+    // exitIf: optional predicate called after each opening tag is pushed.
+    // Stored directly — it's a plain function, not an ExpressionSet.
+    this._exitIf = typeof options.exitIf === 'function' ? options.exitIf : null;
   }
 
   initializeParser() {
     this.tagTextData = "";
     this.tagsStack = [];
     this._stopNodeProcessor = null;
+    this._exitIfTriggered = false;
 
     if (!this.matcher) {
       this.matcher = new Matcher();
@@ -74,6 +79,14 @@ export default class Xml2JsParser {
    */
   _createOutputBuilder() {
     return this.options.OutputBuilder.getInstance(this.options, this.readonlyMatcher);
+  }
+
+  /**
+   * Returns true if the last parse call was terminated early by exitIf.
+   * Useful when the caller needs to know whether parsing completed or stopped.
+   */
+  wasExited() {
+    return this._exitIfTriggered === true;
   }
 
   parse(strData) {
@@ -100,6 +113,9 @@ export default class Xml2JsParser {
    */
   parseXml() {
     while (this.source.canRead()) {
+      // exitIf triggered in this iteration — stop consuming input immediately.
+      if (this._exitIfTriggered) break;
+
       // Level-0 outer mark: set before consuming any character so that if a
       // '<' dispatch throws UNEXPECTED_END (chunk boundary mid-tag), feed()
       // rewinds to here and the full token — including '<', '![', '</' etc. —
@@ -157,6 +173,10 @@ export default class Xml2JsParser {
    * Must be called exactly once after all input has been consumed.
    */
   finalizeXml() {
+    // When exitIf fired, the parser already closed all open tags and notified
+    // the builder — treat the partial parse as complete and skip EOF checks.
+    if (this._exitIfTriggered) return;
+
     const hasOpenTags = this.tagsStack.length > 0 ||
       (this.currentTagDetail && !this.currentTagDetail.root);
 
@@ -341,6 +361,33 @@ export default class Xml2JsParser {
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
+    } else if (this._exitIf && this._exitIf(this.readonlyMatcher)) {
+      // ── exitIf ───────────────────────────────────────────────────────────────
+      // Checked BEFORE addElement so the triggering tag is never added to the
+      // output builder. The matcher is already positioned (push + updateCurrent
+      // above), so attribute-based predicates work correctly.
+      //
+      // We pop the matcher entry for this tag (it was never added to the builder),
+      // then close all already-open ancestors so the builder can finalise its tree.
+
+      const exitDepth = this.tagsStack.length; // number of ancestors open before this tag
+      this.matcher.pop(); // undo the push for the triggering tag
+
+      while (this.currentTagDetail && !this.currentTagDetail.root) {
+        this.addTextNode();
+        this.popTag();
+      }
+
+      // Notify the output builder that parsing was intentionally truncated.
+      if (typeof this.outputBuilder.onExit === 'function') {
+        this.outputBuilder.onExit({
+          tagDetail,
+          matcher: this.readonlyMatcher,
+          depth: exitDepth,
+        });
+      }
+
+      this._exitIfTriggered = true;
     } else {
       this.pushTag(tagDetail);
     }

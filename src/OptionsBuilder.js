@@ -134,6 +134,25 @@ export const defaultOptions = {
     flushThreshold: 1024,
   },
 
+  // --- exitIf ---
+  // Stops parsing as soon as the predicate returns true for the current tag.
+  //
+  // The callback receives a read-only matcher positioned at the just-opened tag:
+  //   exitIf(matcher) → boolean
+  //
+  // When exitIf returns true the parser immediately:
+  //   1. Closes all currently open tags (innermost first) by calling addTextNode()
+  //      and popTag() for each, so the output builder can finalise its tree.
+  //   2. Calls outputBuilder.onExit({ tagDetail, matcher, tagsStack }) so the
+  //      builder can record that the parse was intentionally truncated.
+  //   3. Breaks the parse loop — no further source characters are read.
+  //
+  // The parse call returns the partial-but-consistent output as normal.
+  // No error is thrown.
+  //
+  // Default: null (feature disabled)
+  exitIf: null,
+
   // --- output ---
   OutputBuilder: null, //TODO: accept lower case
 };
@@ -225,6 +244,16 @@ export const buildOptions = function (options) {
 
   if (finalOptions.onDangerousProperty === null) {
     finalOptions.onDangerousProperty = defaultOnDangerousProperty;
+  }
+
+  // Validate exitIf
+  if (finalOptions.exitIf !== null && finalOptions.exitIf !== undefined) {
+    if (typeof finalOptions.exitIf !== 'function') {
+      throw new ParseError(
+        `'exitIf' must be a function, got ${typeof finalOptions.exitIf}`,
+        ErrorCode.INVALID_INPUT,
+      );
+    }
   }
 
   // Resolve autoClose: expand the 'html' preset and normalise to an object

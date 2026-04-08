@@ -34,6 +34,7 @@ export default class XMLParser {
 
     const parser = this._createParser();
     const result = parser.parse(xmlData);
+    this.wasExited = parser.wasExited();
     this._lastParseErrors = parser.autoCloseHandler?.getErrors() ?? [];
     return result;
   }
@@ -51,6 +52,7 @@ export default class XMLParser {
 
     const parser = this._createParser();
     const result = parser.parseBytesArr(xmlData);
+    this.wasExited = parser.wasExited();
     this._lastParseErrors = parser.autoCloseHandler?.getErrors() ?? [];
     return result;
   }
@@ -234,6 +236,7 @@ export default class XMLParser {
       }
 
       this._lastParseErrors = autoClose?.getErrors() ?? [];
+      this.wasExited = this._feedParser.wasExited();
       return this._feedParser.outputBuilder.getOutput();
     } finally {
       this._cleanupFeedSession();
