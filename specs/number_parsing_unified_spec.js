@@ -1,6 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import { CompactBuilderFactory } from "@solothought/compact-builder"
-import { numberParser } from "@solothought/base-output-builder";
+import { CompactBuilderFactory } from "@nodable/compact-builder"
+import { numberParser } from "@nodable/base-output-builder";
 import { runAcrossAllInputSources, createInputSource, describeAcrossAllInputSources } from "./helpers/testRunner.js";
 
 // Helper: build a parser with a custom numberParser configuration.

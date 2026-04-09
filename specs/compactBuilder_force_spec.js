@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import { CompactBuilder, CompactBuilderFactory } from "@solothought/compact-builder";
+import { CompactBuilder, CompactBuilderFactory } from "@nodable/compact-builder";
 import { Expression } from "path-expression-matcher";
 import {
   frunAcrossAllInputSources,

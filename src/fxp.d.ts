@@ -1,4 +1,4 @@
-import { BaseOutputBuilderFactory } from "@solothought/base-output-builder"
+import { BaseOutputBuilderFactory } from "@nodable/base-output-builder"
 
 /**
  * Flex XML Parser — TypeScript Definitions

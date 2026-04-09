@@ -1,6 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import { numberParser, EntitiesValueParser } from "@solothought/base-output-builder";
-import { CompactBuilderFactory } from "@solothought/compact-builder";
+import { numberParser, EntitiesValueParser } from "@nodable/base-output-builder";
+import { CompactBuilderFactory } from "@nodable/compact-builder";
 
 describe("Value Parsers", function () {
 

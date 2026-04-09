@@ -14,8 +14,8 @@
 
 import XMLParser from "../src/XMLParser.js";
 import { Expression } from "path-expression-matcher";
-import { CompactBuilderFactory, CompactBuilder } from "@solothought/compact-builder";
-import { ElementType } from "@solothought/base-output-builder";
+import { CompactBuilderFactory, CompactBuilder } from "@nodable/compact-builder";
+import { ElementType } from "@nodable/base-output-builder";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 function makeFactory(BuilderSubclass) {

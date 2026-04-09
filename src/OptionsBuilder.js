@@ -1,4 +1,4 @@
-import { CompactBuilderFactory } from '@solothought/compact-builder';
+import { CompactBuilderFactory } from '@nodable/compact-builder';
 import { Expression, ExpressionSet } from 'path-expression-matcher';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';

@@ -281,4 +281,4 @@ const parser = new XMLParser(options);
 
 ## License
 
-MIT — [Amit Gupta](https://solothought.com)
+MIT — [Amit Gupta](https://nodable.com)
