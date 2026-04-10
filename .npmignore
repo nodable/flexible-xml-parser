@@ -1,14 +1,16 @@
 # Unrelevant files and folders
 benchmark
 coverage
-spec
+specs
 static
 .*
 index.html
 webpack*
-lib
+lib*
 temp*
 *todo.md
 docs*
 .nyc_output
-USERs.md
+node_modules
+.github
+TODO.md

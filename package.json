@@ -1,6 +1,6 @@
 {
   "name": "@nodable/flexible-xml-parser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fastest XML parser in pure JS with fully customizable ouput",
   "main": "./lib/fxp.cjs",
   "type": "module",

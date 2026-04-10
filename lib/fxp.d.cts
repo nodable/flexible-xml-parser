@@ -5,6 +5,39 @@
  * It is referenced from the `exports["."].require.types` field in package.json.
  */
 
+/**
+ * Object form of a skip-tag entry — allows per-node control of nested depth
+ * tracking and enclosure skipping when scanning for the closing tag.
+ *
+ * ```ts
+ * import { xmlEnclosures } from '@nodable/flexible-xml-parser';
+ *
+ * const parser = new XMLParser({
+ *   skip: {
+ *     tags: [
+ *       "..secret",
+ *       { expression: "root.internal", nested: true, skipEnclosures: [...xmlEnclosures] },
+ *     ]
+ *   }
+ * });
+ * ```
+ */
+interface SkipTagEntry {
+  /** Path expression (same syntax as string skip-tag entries). */
+  expression: string;
+  /**
+   * When true, nested same-name open tags are tracked and the skip ends only
+   * when the outermost closing tag is found. Default: false.
+   */
+  nested?: boolean;
+  /**
+   * Enclosure pairs to skip while scanning for the closing tag.
+   * Checked in array order — first open match wins.
+   * Defaults to `[]` (plain first-match, no enclosure awareness).
+   */
+  skipEnclosures?: Enclosure[];
+}
+
 interface SkipOptions {
   /** Skip XML declaration `<?xml ... ?>` from output. Default: false */
   declaration?: boolean;
@@ -22,8 +55,30 @@ interface SkipOptions {
    * Default: false
    */
   nsPrefix?: boolean;
-  /** (future) Tag-level filtering — not yet implemented. Default: false */
-  tags?: boolean;
+  /**
+   * Tag paths whose entire subtree is silently dropped from output.
+   * The parser advances past the closing tag using the same raw-collection
+   * mechanism as stop nodes, then discards the content without calling
+   * any output builder methods.
+   *
+   * Each entry is either:
+   *   - A plain string path expression — equivalent to `{ expression, nested: false, skipEnclosures: [] }`.
+   *     The very first `</tagName>` ends collection.
+   *   - A `SkipTagEntry` object with optional `nested` and `skipEnclosures`.
+   *
+   * Supports path-expression-matcher syntax. Default: []
+   *
+   * @example
+   * import { xmlEnclosures } from '@nodable/flexible-xml-parser';
+   *
+   * skip: {
+   *   tags: [
+   *     "..secret",
+   *     { expression: "root.internal", nested: true, skipEnclosures: [...xmlEnclosures] },
+   *   ]
+   * }
+   */
+  tags?: Array<string | SkipTagEntry>;
 }
 
 interface NameForOptions {
@@ -54,12 +109,6 @@ interface AttributeOptions {
   prefix?: string;
   /** Suffix appended to attribute names in output. Default: '' */
   suffix?: string;
-  /**
-   * Value parser chain for attribute values.
-   * Built-in names: 'entity', 'number', 'boolean', 'trim', 'currency'.
-   * Default: ['entity', 'number', 'boolean']
-   */
-  valueParsers?: Array<string | ValueParser>;
 }
 
 /**
@@ -82,7 +131,7 @@ interface Enclosure {
  * enclosures the processor should skip when scanning for the closing tag.
  *
  * ```ts
- * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+ * import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
  *
  * const parser = new XMLParser({
  *   tags: {
@@ -98,6 +147,11 @@ interface Enclosure {
 interface StopNodeEntry {
   /** Path expression (same syntax as string stop-node entries). */
   expression: string;
+  /**
+   * When true, nested same-name open tags are tracked and the stop node ends
+   * only when the outermost closing tag is found. Default: false.
+   */
+  nested?: boolean;
   /**
    * Enclosure pairs to skip while scanning for the closing tag.
    * Checked in array order — first open match wins.
@@ -123,7 +177,7 @@ interface TagOptions {
    * Supports path-expression-matcher syntax. Default: []
    *
    * @example
-   * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+   * import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
    *
    * stopNodes: [
    *   "..script",                                              // plain
@@ -132,56 +186,19 @@ interface TagOptions {
    * ]
    */
   stopNodes?: Array<string | StopNodeEntry>;
-  /**
-   * Value parser chain for tag text content.
-   * Built-in names: 'entity', 'boolean', 'number', 'trim', 'currency'.
-   * Default: ['entity', 'boolean', 'number']
-   * Add 'trim' to strip leading/trailing whitespace (not done by default).
-   */
-  valueParsers?: Array<string | ValueParser>;
-  separateTextProperty?: boolean;
 }
 
 /**
- * A custom entity map: keys are entity names (without & and ;),
- * values are replacement strings.
- * @example { 'copy': '©', 'trade': '™' }
+ * Options for DOCTYPE reading — controls whether entities are collected
+ * and enforces read-time security limits.
  */
-type EntityMap = Record<string, string>;
-
-interface EntityParseOptions {
+interface DoctypeOptions {
   /**
-   * Built-in XML entities: lt, gt, apos, quot, amp.
-   *   true (default) → use built-in set
-   *   false / null   → disable XML entity replacement entirely
-   *   EntityMap      → use this custom map instead of the built-in set
+   * Whether to collect entities declared in the DOCTYPE internal subset and
+   * forward them to the output builder for replacement.
+   * The DOCTYPE block is always read to consume it; this flag controls forwarding.
    */
-  default?: boolean | null | EntityMap;
-
-  /**
-   * HTML named entities: &nbsp;, &copy;, &reg;, numeric refs, etc.
-   *   false / null (default) → disabled
-   *   true                   → use built-in HTML entity set
-   *   EntityMap              → use this custom map instead of the built-in set
-   */
-  html?: boolean | null | EntityMap;
-
-  /**
-   * Whether entities registered via `parser.addEntity()` are applied during replacement.
-   * Entities are always stored regardless of this flag — it only controls application.
-   *   true (default) → applied
-   *   false / null   → stored but not applied (easy on/off without removing registrations)
-   */
-  external?: boolean | null;
-
-  /**
-   * Whether entities declared in a DOCTYPE internal subset are collected and applied.
-   * The DOCTYPE block is always read to consume it; this flag controls entity storage.
-   * Also requires 'entity' in valueParsers for replacement to happen.
-   *   false / null (default) → entities discarded
-   *   true                   → entities collected and applied during replacement
-   */
-  docType?: boolean | null;
+  enabled?: boolean;
 
   /**
    * Max number of entities that may be declared in a DOCTYPE internal subset.
@@ -196,31 +213,6 @@ interface EntityParseOptions {
    * Default: 10000
    */
   maxEntitySize?: number;
-
-  /**
-   * Max total entity references expanded per document (across DOCTYPE, external, and built-in).
-   * Enforced during value parsing. Protects against Billion Laughs style attacks.
-   * Default: 1000
-   */
-  maxTotalExpansions?: number;
-
-  /**
-   * Max total characters added to output by entity expansion per document.
-   * Enforced during value parsing.
-   * Default: 100000
-   */
-  maxExpandedLength?: number;
-}
-
-interface NumberParseOptions {
-  /** Parse 0x... hex notation. Default: true */
-  hex?: boolean;
-  /** Treat strings with leading zeros as numbers ('007' → 7). Default: true */
-  leadingZeros?: boolean;
-  /** Parse scientific notation (1e5, 2.5E-3). Default: true */
-  eNotation?: boolean;
-  /** How to handle Infinity values. Default: 'original' */
-  infinity?: 'original' | 'string' | 'number';
 }
 
 // ─── Error handling ────────────────────────────────────────────────────────────
@@ -432,12 +424,12 @@ interface X2jOptions {
   /** Tag parsing options including stop nodes and value parser chain */
   tags?: TagOptions;
 
-  // --- entity parsing ---
+  // --- DOCTYPE parsing ---
   /**
-   * Controls which entity sources are active and security limits.
-   * Entity replacement only happens when 'entity' is in the valueParsers chain.
+   * Controls whether DOCTYPE entities are collected and read-time security limits.
+   * Once collected will be passed to Output builder to take any decision
    */
-  entityParseOptions?: EntityParseOptions;
+  doctypeOptions?: DoctypeOptions;
 
   // --- security ---
   /** Throw when a tag/attribute name collides with a nameFor.* or attributes.groupBy value. Default: false */
@@ -448,9 +440,6 @@ interface X2jOptions {
   // --- filtering (path-expression-matcher) ---
   select?: string[];
   only?: string[];
-
-  // --- number parsing ---
-  numberParseOptions?: NumberParseOptions;
 
   // --- limits (DoS prevention) ---
   /**
@@ -589,15 +578,6 @@ default class XMLParser {
   end(): any;
 
   /**
-   * Register a custom entity for replacement (without `&` and `;`).
-   * Entities are always stored regardless of `entityParseOptions.external`.
-   * The `external` flag controls whether they are applied during replacement.
-   * @throws {ParseError} with code `ENTITY_INVALID_KEY` or `ENTITY_INVALID_VALUE`.
-   * @example parser.addEntity('copy', '©');
-   */
-  addEntity(key: string, value: string): void;
-
-  /**
    * Return structural errors collected during the last parse call.
    * Only populated when `autoClose.collectErrors` is `true`.
    * Each entry: `{ type, tag, expected, line, col, index }`
@@ -610,6 +590,12 @@ default class XMLParser {
     col?: number;
     index?: number;
   }>;
+
+  /**
+   * Returns `true` if the last parse call was terminated early by `exitIf`.
+   * Returns `false` when `exitIf` never fired or the feature is not configured.
+   */
+  wasExited: boolean;
 }
 
 { XMLParser };
@@ -618,77 +604,6 @@ class CompactObjBuilder implements OutputBuilderFactory {
   constructor(options?: Partial<X2jOptions>);
   getInstance(parserOptions: X2jOptions): OutputBuilderInstance;
   registerValueParser(name: string, parser: ValueParser): void;
-}
-
-// ─── Base Output Builder ───────────────────────────────────────────────────────
-
-/**
- * Constants for the `elementType` field in a value-parser context object.
- * Discriminates between tag text values and attribute values.
- */
-declare const ElementType: {
-  readonly TAG: 'ELEMENT';
-  readonly ATTRIBUTE: 'ATTRIBUTE';
-};
-
-/**
- * Abstract base class for custom output builders.
- * Extend this to implement a fully custom output representation.
- *
- * Subclasses must implement: `addTag`, `closeTag`, `addValue`, `getOutput`.
- * Optionally override: `addAttribute`, `addComment`, `addCdata`, `addPi`,
- * `addDeclaration`, `onStopNode`.
- *
- * @example
- * import { BaseOutputBuilder } from 'flex-xml-parser';
- * class MyBuilder extends BaseOutputBuilder { ... }
- */
-declare class BaseOutputBuilder implements OutputBuilderInstance {
-  constructor(readonlyMatcher?: any);
-  addAttribute(name: string, value: any, matcher: any): void;
-  parseValue(val: any, valParsers: Array<string | ValueParser>, context?: object): any;
-  addComment(text: string): void;
-  addLiteral(text: string): void;
-  addRawValue(text: string): void;
-  addDeclaration(): void;
-  addInstruction(name: string): void;
-  addElement(tag: { name: string }, matcher: any): void;
-  closeElement(matcher: any): void;
-  addValue(text: string, matcher: any): void;
-  getOutput(): any;
-  registeredValParsers: Record<string, ValueParser>;
-  onStopNode?(
-    tagDetail: { name: string; line: number; col: number; index: number },
-    rawContent: string,
-    matcher: any,
-  ): void;
-}
-
-// ─── Additional Value Parsers ──────────────────────────────────────────────────
-
-/**
- * Extended boolean parser that also maps "yes"/"no"/"1"/"0" to booleans.
- * Works on scalar strings and arrays of strings.
- */
-declare function booleanParserExt(val: string | string[]): boolean | string | (boolean | string)[];
-
-/**
- * Join parser — joins an array of values into a single string.
- * @param val  Array of values to join.
- * @param by   Separator string. Default: `' '`
- */
-declare function joinParser(val: any[], by?: string): string | any[];
-
-/**
- * Built-in `replaceEntities` value parser class.
- * Registered automatically under the key `'entity'` in every
- * OutputBuilder's `registeredValParsers` map.
- *
- * Import this type when you need to reference or subclass the parser directly.
- */
-declare class ReplaceEntitiesValueParser implements ValueParser {
-  constructor(entityParser: any);
-  parse(val: any, context?: object): any;
 }
 
 // ─── Stop-node utilities ───────────────────────────────────────────────────────
@@ -728,7 +643,8 @@ declare namespace fxp {
     BaseOutputBuilder,
     booleanParserExt,
     joinParser,
-    quoteEnclosures
+    quoteEnclosures,
+    DoctypeOptions
   }
 }
 
