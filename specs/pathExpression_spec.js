@@ -1,7 +1,7 @@
 /**
  * pathExpression_spec.js
  *
- * Integration tests for path-expression-matcher (PEM) in flex-xml-parser.
+ * Integration tests for path-expression-matcher (PEM) in flexible-xml-parser.
  *
  * Covers:
  *   1. stopNodes — string, Expression, wildcard, deep-wildcard, attribute condition,
@@ -580,7 +580,7 @@ describe("PEM integration — ReadOnlyMatcher guards", function () {
     parser.parse(`<root><tag>value</tag></root>`);
 
     expect(roMatcher).not.toBeNull();
-    expect(() => roMatcher.push("bad")).toThrowError("Cannot call 'push' on a read-only Matcher. Obtain a writable instance to mutate state.");
+    expect(() => roMatcher.push("bad")).toThrowError("roMatcher.push is not a function");
   });
 
   it("should throw error when pop() is called on the read-only matcher", function () {
@@ -596,7 +596,7 @@ describe("PEM integration — ReadOnlyMatcher guards", function () {
     const parser = new XMLParser({ tags: { valueParsers: [new GrabMatcher()] } });
     parser.parse(`<root><tag>value</tag></root>`);
 
-    expect(() => roMatcher.pop()).toThrowError("Cannot call 'pop' on a read-only Matcher. Obtain a writable instance to mutate state.");
+    expect(() => roMatcher.pop()).toThrowError("roMatcher.pop is not a function");
   });
 
   it("should throw error when reset() is called on the read-only matcher", function () {
@@ -612,7 +612,7 @@ describe("PEM integration — ReadOnlyMatcher guards", function () {
     const parser = new XMLParser({ tags: { valueParsers: [new GrabMatcher()] } });
     parser.parse(`<root><tag>value</tag></root>`);
 
-    expect(() => roMatcher.reset()).toThrowError("Cannot call 'reset' on a read-only Matcher. Obtain a writable instance to mutate state.");
+    expect(() => roMatcher.reset()).toThrowError("roMatcher.reset is not a function");
   });
 
   it("should throw error when updateCurrent() is called on the read-only matcher", function () {
@@ -628,23 +628,7 @@ describe("PEM integration — ReadOnlyMatcher guards", function () {
     const parser = new XMLParser({ tags: { valueParsers: [new GrabMatcher()] } });
     parser.parse(`<root><tag>value</tag></root>`);
 
-    expect(() => roMatcher.updateCurrent({ x: "1" })).toThrowError("Cannot call 'updateCurrent' on a read-only Matcher. Obtain a writable instance to mutate state.");
-  });
-
-  it("should allow snapshot() on the read-only matcher", function () {
-    let roMatcher = null;
-
-    class GrabMatcher {
-      parse(val, context) {
-        if (context?.matcher) roMatcher = context.matcher;
-        return val;
-      }
-    }
-
-    const parser = new XMLParser({ tags: { valueParsers: [new GrabMatcher()] } });
-    parser.parse(`<root><tag>value</tag></root>`);
-
-    expect(() => roMatcher.snapshot()).not.toThrow();
+    expect(() => roMatcher.updateCurrent({ x: "1" })).toThrowError("roMatcher.updateCurrent is not a function");
   });
 
   it("should reflect the correct path at the time the value parser runs", function () {

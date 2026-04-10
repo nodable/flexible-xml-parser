@@ -1,7 +1,7 @@
 {
   "name": "@nodable/flexible-xml-parser",
   "version": "1.0.0",
-  "description": "Flexible XML parser with pluggable output builders and value parsers",
+  "description": "Fastest XML parser in pure JS with fully customizable ouput",
   "main": "./lib/fxp.cjs",
   "type": "module",
   "sideEffects": false,
@@ -40,10 +40,13 @@
   ],
   "author": "Amit Gupta (https://solothought.com)",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@nodable/base-output-builder": "file:../flex-output-builders/base-output-builder",
-    "@nodable/compact-builder": "file:../flex-output-builders/compact-builder",
-    "path-expression-matcher": "^1.4.0",
+    "@nodable/base-output-builder": "^1.0.2",
+    "@nodable/compact-builder": "^1.0.2",
+    "path-expression-matcher": "^1.5.0",
     "strnum": "^2.2.2"
   },
   "devDependencies": {
@@ -51,8 +54,6 @@
     "@babel/plugin-transform-runtime": "^7.29.0",
     "@babel/preset-env": "^7.29.2",
     "@babel/register": "^7.28.6",
-    "@nodable/node-tree-builder": "file:../flex-output-builders/NodeTreeBuilder",
-    "@nodable/sequential-builder": "file:../flex-output-builders/SequentialBuilder",
     "@types/node": "^20.19.37",
     "babel-loader": "^10.1.1",
     "c8": "^11.0.0",
@@ -62,7 +63,7 @@
     "webpack-cli": "^7.0.2"
   },
   "files": [
-    "lib",
+    "lib/fxp.d.cts",
     "src",
     "CHANGELOG.md"
   ],
@@ -71,5 +72,9 @@
       "type": "github",
       "url": "https://github.com/sponsors/nodable"
     }
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodable/flexible-xml-parser.git"
+  }
 }
