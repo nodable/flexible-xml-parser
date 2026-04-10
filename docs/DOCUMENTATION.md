@@ -20,8 +20,8 @@
 Flex XML Parser is a flexible, high-performance XML parser for Node.js with:
 
 - **Clean option design** — grouped, purposeful options with sensible defaults
-- **Pluggable Output Builders** — `CompactObjBuilder`, `NodeTreeBuilder`, `JsMinArrBuilder`, or your own
-- **Value Parser Chain** — composable transformers: `replaceEntities`, `boolean`, `number`, `trim`, `currency`, or custom
+- **Pluggable Output Builders** — `CompactBuilder`, `NodeTreeBuilder`, `SequentialBuilder`, or your own
+- **Value Parser Chain** — composable transformers: `entity`, `boolean`, `number`, `trim`, `currency`, or custom
 - **Integrated Security** — entity expansion limits, prototype-pollution prevention
 - **TypeScript Support** — complete type definitions
 - **ES Modules** — modern JavaScript with proper imports
@@ -31,7 +31,7 @@ Flex XML Parser is a flexible, high-performance XML parser for Node.js with:
 ## Installation
 
 ```bash
-npm install flex-xml-parser
+npm install @nodable/flexible-xml-parser
 ```
 
 ---
@@ -39,7 +39,7 @@ npm install flex-xml-parser
 ## Quick Start
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser();
 const result = parser.parse('<root><tag>42</tag></root>');
@@ -58,17 +58,7 @@ const result = parser.parse('<item id="1">hello</item>');
 
 ## Architecture
 
-### Core Components
 
-| Component | Role |
-|-----------|------|
-| `XMLParser` | Public entry point — manages options, exposes all APIs |
-| `Xml2JsParser` | Core parsing engine — tokenises XML, drives the OutputBuilder |
-| `OutputBuilder` | Assembles the JS result from parse events; owns the value parser chain |
-| `ValueParsers` | Chainable transformers: string → typed value |
-| `EntitiesParser` | Holds entity tables (built-in, DOCTYPE, external); used by `EntitiesValueParser` |
-| `EntitiesValueParser` | Value parser that expands entity references; owns external entity registration |
-| `DocTypeReader` | Reads DOCTYPE declarations, respects `doctypeOptions` read-time limits |
 
 ### Data Flow
 
@@ -324,7 +314,7 @@ Entity source flags and replacement-time limits are configured on `EntitiesValue
 which is registered on the output builder — not on `XMLParser`.
 
 ```javascript
-import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from '@nodable/flexible-xml-parser';
 
 const evp = new EntitiesValueParser({
   // ── Entity sources ───────────────────────────────────────────────────────
@@ -440,7 +430,7 @@ const builder2 = new CompactObjBuilder({
 });
 
 // Enable HTML entities
-import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from '@nodable/flexible-xml-parser';
 const evp = new EntitiesValueParser({ default: true, html: true });
 const builder3 = new CompactObjBuilder();
 builder3.registerValueParser('entity', evp);
@@ -456,7 +446,7 @@ const builder4 = new CompactObjBuilder({
 Every parser in the chain receives a `context` object as the second argument:
 
 ```javascript
-import { ElementType } from 'flex-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
+import { ElementType } from 'flexible-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
 import { Expression }  from 'path-expression-matcher';
 
 const priceExpr = new Expression("..price");  // compile once
@@ -483,7 +473,7 @@ const parser = new XMLParser({
 **Context shape:**
 
 ```typescript
-import { ElementType } from 'flex-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
+import { ElementType } from 'flexible-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
 
 {
   elementName:  string;              // tag name or attribute name
@@ -534,7 +524,7 @@ Produces a plain JS object. Repeated tags become arrays automatically.
 Preserves full document order. Each node: `{ tagname, child[], ':@'? }`.
 
 ```javascript
-import NodeTreeBuilder from 'flex-xml-parser/src/OutputBuilders/NodeTreeBuilder.js';
+import NodeTreeBuilder from 'flexible-xml-parser/src/OutputBuilders/NodeTreeBuilder.js';
 const parser = new XMLParser({ OutputBuilder: new NodeTreeBuilder() });
 ```
 
@@ -544,7 +534,7 @@ const parser = new XMLParser({ OutputBuilder: new NodeTreeBuilder() });
 Extend `BaseOutputBuilder`:
 
 ```javascript
-import BaseOutputBuilder from 'flex-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
+import BaseOutputBuilder from 'flexible-xml-parser/src/OutputBuilders/BaseOutputBuilder.js';
 
 class EventBuilder extends BaseOutputBuilder {
   constructor() {
@@ -635,7 +625,7 @@ parser.parse(`
 ### DOCTYPE entities
 
 ```javascript
-import { XMLParser, EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
+import { XMLParser, EntitiesValueParser, CompactObjBuilder } from '@nodable/flexible-xml-parser';
 
 const evp = new EntitiesValueParser({ default: true });
 const builder = new CompactObjBuilder();
@@ -771,7 +761,7 @@ const parser = new XMLParser();
 **Tighten limits for untrusted input:**
 
 ```javascript
-import { EntitiesValueParser, CompactObjBuilder } from 'flex-xml-parser';
+import { EntitiesValueParser, CompactObjBuilder } from '@nodable/flexible-xml-parser';
 
 const evp = new EntitiesValueParser({
   default:            true,

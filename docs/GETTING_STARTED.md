@@ -5,7 +5,7 @@ Welcome to Flex XML Parser v6! This guide will get you up and running quickly.
 ## Installation
 
 ```bash
-npm install flex-xml-parser
+npm install @nodable/flexible-xml-parser
 ```
 
 ## Your First Parser
@@ -13,7 +13,7 @@ npm install flex-xml-parser
 Create a file `example.js`:
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const xmlData = `
   <books>
@@ -74,7 +74,7 @@ Output:
 ### 1. Parse Configuration Files
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const configXml = `
   <config>
@@ -102,7 +102,7 @@ console.log(config.config.cache.enabled);    // true (automatically converted to
 ### 2. Parse RSS Feeds
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -122,7 +122,7 @@ for (const item of feed.rss.channel.item) {
 ### 3. Parse API Responses
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -141,8 +141,8 @@ console.log(data);
 ### 4. Keep Leading Zeros
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
-import numberParser from 'flex-xml-parser/valueParsers/number';
+import XMLParser from '@nodable/flexible-xml-parser';
+import numberParser from 'flexible-xml-parser/valueParsers/number';
 
 const xmlData = `
   <products>
@@ -173,7 +173,7 @@ console.log(result.products.product.price);  // 19.99 (converted to number)
 ### 5. Disable All Parsing (Raw Strings)
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser({
   tags: { valueParsers: [] },
@@ -190,7 +190,7 @@ console.log(result.data.bool);    // "true" (string)
 ### 6. Parse with Validation
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser();
 
@@ -209,7 +209,7 @@ try {
 ### 7. Handle CDATA
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const xmlData = `
   <content>
@@ -236,7 +236,7 @@ console.log(result2.content.html.__cdata);
 ### 8. Handle Namespaces
 
 ```javascript
-import XMLParser from 'flex-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
 
 const xmlData = `
   <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -347,7 +347,7 @@ const parser = new XMLParser({
 
 **Q: Leading zeros are being removed**
 ```javascript
-import numberParser from 'flex-xml-parser/valueParsers/number';
+import numberParser from 'flexible-xml-parser/valueParsers/number';
 
 const parser = new XMLParser({
   tags: {

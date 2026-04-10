@@ -19,7 +19,7 @@ Be respectful, constructive, and professional in all interactions.
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/flex-xml-parser.git`
+2. Clone your fork: `git clone https://github.com/your-username/flexible-xml-parser.git`
 3. Create a branch: `git checkout -b feature/your-feature-name`
 
 ## Development Setup
@@ -38,7 +38,7 @@ node test-suite.js
 ## Project Structure
 
 ```
-flex-xml-parser/
+flexible-xml-parser/
 ├── XMLParser.js              # Main entry point
 ├── Xml2JsParser.js           # Core parsing engine
 ├── OptionsBuilder.js         # Options management

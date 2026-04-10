@@ -62,12 +62,13 @@ const result = parser.end();
 new XMLParser({
   // What to exclude from output
   skip: {
-    attributes:  true,   // set false to parse attributes (default: true)
-    nsPrefix:    false,  // strip ns:tag → tag (default: false)
-    declaration: false,
-    pi:          false,
-    cdata:       false,
-    comment:     false,
+    declaration: false,   // Skip <?xml ... ?> declaration
+    pi: false,            // Skip processing instructions (other than declaration)
+    attributes: true,     // Skip all attributes
+    cdata: false,         // Exclude CDATA sections from output entirely
+    comment: false,       // Exclude comments from output entirely
+    nsPrefix: false,      // Strip namespace prefixes (e.g. ns:tag → tag)
+    tags: [],             // Tag paths to skip entirely — content is silently dropped from output
   },
 
   // Property names for special nodes
@@ -83,29 +84,14 @@ new XMLParser({
     suffix:       '',
     groupBy:      '',     // group all attributes under this key; '' = inline
     booleanType:  false,  // allow valueless attributes (treated as true)
-    valueParsers: ['entity', 'number', 'boolean'],
   },
 
   // Tag value options
   tags: {
     unpaired:     [],     // self-closing tags without / (e.g. ['br', 'img'])
     stopNodes:    [],     // paths whose content is captured raw (see below)
-    valueParsers: ['entity', 'number', 'boolean'],
   },
 
-  numberParseOptions: { hex: true, leadingZeros: true, eNotation: true },
-
-  // Entity sources and security limits
-  entityParseOptions: {
-    default:            true,    // built-in XML entities (lt, gt, amp, …)
-    html:               false,   // HTML named entities (&nbsp;, &copy;, …)
-    external:           true,    // entities added via parser.addEntity()
-    docType:            false,   // entities declared in DOCTYPE internal subset
-    maxEntityCount:     100,
-    maxEntitySize:      10000,
-    maxTotalExpansions: 1000,
-    maxExpandedLength:  100000,
-  },
 
   // DoS prevention
   limits: {
@@ -113,59 +99,51 @@ new XMLParser({
     maxAttributesPerTag: null,   // max attributes on a single tag
   },
 
+  doctypeOptions: {
+    enabled: false,
+    maxEntityCount: 100,
+    maxEntitySize: 10000,
+  },
+
+// --- security ---
+  strictReservedNames: false,
+  onDangerousProperty: defaultOnDangerousProperty,
+
+exitIf: null,
+
+  feedable: {
+    maxBufferSize: 10 * 1024 * 1024,
+    autoFlush: true,
+    flushThreshold: 1024,
+  },
+
   // Lenient HTML-mode recovery
   autoClose: null,  // null = strict; 'html' = recover from unclosed/mismatched tags
 
-  // Pluggable output builder (default: CompactObjBuilder)
+  // Pluggable output builder (default: CompactBuilder)
   OutputBuilder: null,
 });
 ```
 
 ## Value parsers
 
+Value parsers let you control parsing of values of elements and attributes. This can be configured in output builders
+
 Built-in chain names: `'entity'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
 
 ```javascript
 // Disable entity expansion
-new XMLParser({ tags: { valueParsers: ['number', 'boolean'] } });
-
-// HTML entities + trim whitespace
+const builderConfig = { tags: { valueParsers: ['number', 'boolean'] } }
 new XMLParser({
-  tags: { valueParsers: ['entity', 'trim', 'number', 'boolean'] },
-  entityParseOptions: { html: true },
-});
-
-// All values as raw strings
-new XMLParser({ tags: { valueParsers: [] }, attributes: { valueParsers: [] } });
-```
-
-Custom parsers receive `(val, context)` where context carries `{ elementName, elementValue, elementType, matcher, isLeafNode }`:
-
-```javascript
-class PriceParser {
-  parse(val, context) {
-    return context.elementName === 'price' ? parseFloat(val) : val;
-  }
-}
-
-new XMLParser({
-  tags: { valueParsers: ['entity', new PriceParser(), 'boolean'] },
+  OutputBuilder: new CompactObjBuilderFactory(builderConfig)
 });
 ```
 
-Register a reusable custom parser by name via `CompactObjBuilder`:
+Benfits of this approach:
+- You may keep any value parser of your need.
+- You can separate parseing logic separate for tags and attributes.
+- You can create your own value parsers.
 
-```javascript
-import { CompactObjBuilder } from 'flexible-xml-parser';
-
-const builder = new CompactObjBuilder();
-builder.registerValueParser('price', new PriceParser());
-
-new XMLParser({
-  tags:          { valueParsers: ['entity', 'price', 'boolean'] },
-  OutputBuilder: builder,
-});
-```
 
 ## Stop nodes
 
@@ -193,10 +171,11 @@ new XMLParser({
 ## Pluggable output builders
 
 ```javascript
-import XMLParser, { CompactObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
+import { BaseOutputBuilder, ElementType } from '@nodable/base-output-builder';
+import { CompactBuilderFactory } from '@nodable/compact-builder';
 
-// CompactObjBuilder — default JS object output with extra options
-const builder = new CompactObjBuilder({
+// CompactBuilderFactory — default JS object output with extra options
+const builder = new CompactBuilderFactory({
   alwaysArray:   ['item'],           // tag names or path expressions always wrapped in []
   forceArray:    (matcher) => ...,   // function-based array forcing
   forceTextNode: false,              // always emit nameFor.text even for text-only tags
@@ -240,7 +219,7 @@ new XMLParser({
 ## Error handling
 
 ```javascript
-import XMLParser, { ParseError, ErrorCode } from 'flexible-xml-parser';
+import XMLParser, { ParseError, ErrorCode } from '@nodable/flexible-xml-parser';
 
 try {
   parser.parse(xml);
@@ -267,12 +246,11 @@ parser.addEntity('trade', '™');
 ## TypeScript
 
 ```typescript
-import XMLParser, { X2jOptions, CompactObjBuilder, BaseOutputBuilder, ElementType } from 'flexible-xml-parser';
+import XMLParser, { X2jOptions, CompactObjBuilder, BaseOutputBuilder, ElementType } from '@nodable/flexible-xml-parser';
 
 const options: X2jOptions = {
   skip:    { attributes: false, nsPrefix: true },
   nameFor: { cdata: '#cdata' },
-  tags:    { valueParsers: ['entity', 'trim', 'number', 'boolean'] },
   limits:  { maxNestedTags: 100 },
 };
 
@@ -281,4 +259,4 @@ const parser = new XMLParser(options);
 
 ## License
 
-MIT — [Amit Gupta](https://nodable.com)
+MIT — [Amit Gupta](https://solothought.com)
