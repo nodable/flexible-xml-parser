@@ -1,42 +1,161 @@
-# Flexible XML Parser
+# @nodable/flexible-xml-parser
 
-A flexible, high-performance XML parser for Node.js with pluggable output builders, a composable value parser chain, and multiple input modes.
+A high-performance, flexible XML parser in pure javascript for Node.js and browsers with pluggable output builders, composable value parsers, and multiple input modes.
 
-## Features
+> From the creater of fast-xml-parser
 
-- **Multiple input modes** — string, Buffer, Uint8Array, Node.js streams, and incremental feed/end API. More can be created easily.
-- **Pluggable output builders** — swap `CompactObjBuilder` for `NodeTreeBuilder`, `OrderedKeyValueBuilder`, or your own subclass of `BaseOutputBuilder`
-- **Composable value parser chain** — built-in parsers for entities, numbers, booleans, trim, and currency; custom parsers receive full context
-- **Path-expression stop nodes** — capture raw content inside matched tags (e.g. `<script>`, `<style>`) without further XML parsing; configurable enclosure skipping for nested quotes and comments
-- **Entity expansion control** — built-in XML entities, optional HTML entities, external/registered entities, DocType-declared entities; all with DoS-prevention limits
-- **Auto-close for lenient HTML parsing** — configurable recovery from unclosed tags and mismatched close tags; collect parse errors without throwing
-- **DoS protection** — configurable limits on nesting depth, attributes per tag, entity count, entity size, and total expansion length
-- **Security** — prototype-pollution prevention; reserved names throw; dangerous names are sanitised by default
-- **TypeScript definitions** — complete dual-mode types (`fxp.d.ts` for ESM, `fxp.d.cts` for CJS)
-- **ES Modules + CommonJS** — `"type": "module"` source with a bundled CJS output
+## Benefits over fast-xml-parser?
+
+| Feature | fast-xml-parser | flexible-xml-parser |
+|---|---|---|
+| Output format | Fixed JS object | Pluggable (compact, sequential, node-tree, custom) |
+| Value parsing | Inline options | Separate, composable pipeline per output builder |
+| Value parsers for tags vs attrs | Single config | Independent chains |
+| Input modes | String / Buffer | String, Buffer, Uint8Array, Stream, Feed/End |
+| Stop node enclosures | Limited | Per-node `skipEnclosures` control |
+| Exit | After complete processing  | Allow partial parsing |
+| Lenient HTML mode | No | `autoClose` with error collection |
+| Custom output | No | Extend `BaseOutputBuilder` |
+
+The core parser is intentionally minimal. Options like `transformTagName`, `alwaysArray`, `forceTextNode`, and value parser configuration live in the **output builder**, not in `XMLParser`. This keeps the parser lean and lets you mix builders without changing your parsing code.
+
+### Performance
+
+fast-xml-parser doesn't support streams, while flexible-xml-parser does. This makes flexible-xml-parser more memory efficient for large XML files.
+
+Additionally, flexible-xml-parser is considerably faster than fast-xml-parser. Checkout [benchmarks](https://github.com/nodable/flexible-xml-parser) for more details.
+
+## Package Ecosystem
+
+`@nodable/flexible-xml-parser` is the core parser. Output builders are published separately so you only install what you need:
+
+| Package | Description |
+|---|---|
+| `@nodable/flexible-xml-parser` | Core parser (this package) |
+| `@nodable/base-output-builder` | Base class + value parsers (`ElementType`, entity parsers) |
+| `@nodable/compact-builder` | Default JS-object output (like fast-xml-parser) |
+| `@nodable/sequential-builder` | Ordered key-value array output |
+| `@nodable/sequential-stream-builder` | Sequential builder with streaming output |
+| `@nodable/node-tree-builder` | Uniform AST-style node tree |
 
 ## Installation
 
 ```bash
-npm install flexible-xml-parser
+npm install @nodable/flexible-xml-parser @nodable/compact-builder
 ```
+
+Install additional builders only as needed.
 
 ## Quick Start
 
 ```javascript
-import XMLParser from 'flexible-xml-parser';
+import XMLParser from '@nodable/flexible-xml-parser';
+import { CompactBuilderFactory } from '@nodable/compact-builder';
 
+// Default output (uses CompactBuilder internally)
 const parser = new XMLParser();
 const result = parser.parse('<root><count>3</count><active>true</active></root>');
 // { root: { count: 3, active: true } }
 
-// Enable attributes
+// With attributes
 const parser2 = new XMLParser({ skip: { attributes: false } });
 parser2.parse('<item id="1">hello</item>');
 // { item: { '@_id': 1, '#text': 'hello' } }
 ```
 
-## Input modes
+## Options
+
+All options are optional. Pass only what you need.
+
+```javascript
+new XMLParser({
+  // What to skip
+  skip: {
+    attributes:  true,   // Skip all attributes
+    declaration: false,  // Skip <?xml ...?> declaration
+    pi:          false,  // Skip <?...?> processing instructions
+    cdata:       false,  // Exclude CDATA from output entirely
+    comment:     false,  // Exclude comments from output entirely
+    nsPrefix:    false,  // Strip namespace prefixes (ns:tag → tag)
+    tags:        [],     // Tag paths to drop silently from output
+  },
+
+  // Property names for special nodes
+  nameFor: {
+    text:    '#text',  // mixed-content text property
+    cdata:   '',       // '' = merge into text; '#cdata' = separate key
+    comment: '',       // '' = omit; '#comment' = capture
+  },
+
+  // Attribute representation
+  attributes: {
+    prefix:      '@_',
+    suffix:      '',
+    groupBy:     '',     // group all attributes under this key; '' = inline
+    booleanType: false,  // allow valueless attributes (treated as true)
+  },
+
+  // Tag options
+  tags: {
+    unpaired:  [],  // self-closing tags without / (e.g. ['br', 'img'])
+    stopNodes: [],  // paths whose content is captured raw (see docs/04-stop-nodes.md)
+  },
+
+  // DoS prevention
+  limits: {
+    maxNestedTags:       null,
+    maxAttributesPerTag: null,
+  },
+
+  // DOCTYPE entity expansion
+  doctypeOptions: {
+    enabled:        false,
+    maxEntityCount: 100,
+    maxEntitySize:  10000,
+  },
+
+  // Security
+  strictReservedNames:   false,
+  onDangerousProperty:   defaultOnDangerousProperty,
+
+  // Stop parsing early based on a condition
+  exitIf: null,
+
+  // Buffer settings for feed/stream modes
+  feedable: {
+    maxBufferSize:  10 * 1024 * 1024,
+    autoFlush:      true,
+    flushThreshold: 1024,
+  },
+
+  // Lenient HTML-mode recovery
+  autoClose: null,  // null = strict; 'html' = recover from unclosed/mismatched tags
+
+  // Pluggable output builder
+  OutputBuilder: null,  // default: CompactBuilder
+});
+```
+
+## Value Parsers
+
+Value parsers are configured on the **output builder**, not on `XMLParser`. This lets you set independent pipelines for tag text and attribute values.
+
+Built-in parsers: `'entity'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
+
+```javascript
+import { CompactBuilderFactory } from '@nodable/compact-builder';
+
+const builder = new CompactBuilderFactory({
+  tags:       { valueParsers: ['entity', 'boolean', 'number'] },
+  attributes: { valueParsers: ['entity', 'number', 'boolean'] },
+});
+
+const parser = new XMLParser({ OutputBuilder: builder });
+```
+
+See [`docs/03-value-parsers.md`](./docs/03-value-parsers.md) for the full pipeline reference and custom parser guide.
+
+## Input Modes
 
 ```javascript
 // String or Buffer
@@ -46,216 +165,38 @@ parser.parse(Buffer.from('<root/>'));
 // Typed array
 parser.parseBytesArr(new Uint8Array([...]));
 
-// Node.js Readable stream — memory stays proportional to the largest token,
-// not the total document size
+// Node.js Readable stream
 const result = await parser.parseStream(fs.createReadStream('large.xml'));
 
-// Incremental feed — useful for WebSocket / chunked HTTP
+// Incremental feed (WebSocket, chunked HTTP, etc.)
 parser.feed('<root>');
 parser.feed('<item>1</item>');
 const result = parser.end();
 ```
 
-## Options
+## Possible Usage
 
-```javascript
-new XMLParser({
-  // What to exclude from output
-  skip: {
-    declaration: false,   // Skip <?xml ... ?> declaration
-    pi: false,            // Skip processing instructions (other than declaration)
-    attributes: true,     // Skip all attributes
-    cdata: false,         // Exclude CDATA sections from output entirely
-    comment: false,       // Exclude comments from output entirely
-    nsPrefix: false,      // Strip namespace prefixes (e.g. ns:tag → tag)
-    tags: [],             // Tag paths to skip entirely — content is silently dropped from output
-  },
+- Parse XML config files, SOAP responses, RSS/Atom feeds
+- Stream-parse large XML files with bounded memory
+- Build custom AST-style output with `NodeTreeBuilder`
+- Lenient HTML-fragment parsing with `autoClose`
+- Stop-node capture for `<script>`, `<style>`, embedded HTML
+- Extend `BaseOutputBuilder` to write parsed data directly to a database
 
-  // Property names for special nodes
-  nameFor: {
-    text:    '#text',  // mixed-content text property
-    cdata:   '',       // '' = merge CDATA into text; '#cdata' = separate key
-    comment: '',       // '' = omit; '#comment' = capture
-  },
+## Documentation
 
-  // Attribute representation
-  attributes: {
-    prefix:       '@_',
-    suffix:       '',
-    groupBy:      '',     // group all attributes under this key; '' = inline
-    booleanType:  false,  // allow valueless attributes (treated as true)
-  },
-
-  // Tag value options
-  tags: {
-    unpaired:     [],     // self-closing tags without / (e.g. ['br', 'img'])
-    stopNodes:    [],     // paths whose content is captured raw (see below)
-  },
-
-
-  // DoS prevention
-  limits: {
-    maxNestedTags:       null,   // max tag nesting depth
-    maxAttributesPerTag: null,   // max attributes on a single tag
-  },
-
-  doctypeOptions: {
-    enabled: false,
-    maxEntityCount: 100,
-    maxEntitySize: 10000,
-  },
-
-// --- security ---
-  strictReservedNames: false,
-  onDangerousProperty: defaultOnDangerousProperty,
-
-exitIf: null,
-
-  feedable: {
-    maxBufferSize: 10 * 1024 * 1024,
-    autoFlush: true,
-    flushThreshold: 1024,
-  },
-
-  // Lenient HTML-mode recovery
-  autoClose: null,  // null = strict; 'html' = recover from unclosed/mismatched tags
-
-  // Pluggable output builder (default: CompactBuilder)
-  OutputBuilder: null,
-});
-```
-
-## Value parsers
-
-Value parsers let you control parsing of values of elements and attributes. This can be configured in output builders
-
-Built-in chain names: `'entity'`, `'number'`, `'boolean'`, `'trim'`, `'currency'`.
-
-```javascript
-// Disable entity expansion
-const builderConfig = { tags: { valueParsers: ['number', 'boolean'] } }
-new XMLParser({
-  OutputBuilder: new CompactObjBuilderFactory(builderConfig)
-});
-```
-
-Benfits of this approach:
-- You may keep any value parser of your need.
-- You can separate parseing logic separate for tags and attributes.
-- You can create your own value parsers.
-
-
-## Stop nodes
-
-Stop nodes capture raw content without further XML parsing — useful for `<script>`, `<style>`, or embedded HTML fragments.
-
-```javascript
-import { xmlEnclosures, quoteEnclosures } from 'flexible-xml-parser';
-
-new XMLParser({
-  tags: {
-    stopNodes: [
-      '..script',                          // plain — first </script> ends collection
-      { expression: 'body..pre',   skipEnclosures: [...xmlEnclosures] },
-      { expression: 'head..style', skipEnclosures: [...xmlEnclosures, ...quoteEnclosures] },
-    ],
-  },
-  onStopNode(tagDetail, rawContent, matcher) {
-    console.log(tagDetail.name, rawContent);
-  },
-});
-```
-
-`xmlEnclosures` covers XML comments and CDATA; `quoteEnclosures` covers single-quote, double-quote, and template literals.
-
-## Pluggable output builders
-
-```javascript
-import { BaseOutputBuilder, ElementType } from '@nodable/base-output-builder';
-import { CompactBuilderFactory } from '@nodable/compact-builder';
-
-// CompactBuilderFactory — default JS object output with extra options
-const builder = new CompactBuilderFactory({
-  alwaysArray:   ['item'],           // tag names or path expressions always wrapped in []
-  forceArray:    (matcher) => ...,   // function-based array forcing
-  forceTextNode: false,              // always emit nameFor.text even for text-only tags
-  textJoint:     '',                 // join string when text spans multiple text nodes
-});
-
-new XMLParser({ OutputBuilder: builder });
-
-// Custom builder by extending BaseOutputBuilder
-class MyBuilder extends BaseOutputBuilder {
-  addElement(tag, matcher)    { /* … */ }
-  closeElement(matcher)       { /* … */ }
-  addValue(text, matcher) { /* … */ }
-  getOutput()             { return this.result; }
-}
-```
-
-## Auto-close (lenient HTML parsing)
-
-```javascript
-// 'html' preset: recover from unclosed tags and mismatched close tags
-const parser = new XMLParser({ autoClose: 'html' });
-const result = parser.parse('<div><p>text<br></div>');
-
-const errors = parser.getParseErrors();
-// [{ type: 'unclosed-eof', tag: 'p', line: 1, col: … }, …]
-```
-
-Fine-grained control:
-
-```javascript
-new XMLParser({
-  autoClose: {
-    onEof:         'closeAll',  // 'throw' | 'closeAll'
-    onMismatch:    'recover',   // 'throw' | 'recover' | 'discard'
-    collectErrors: true,
-  },
-});
-```
-
-## Error handling
-
-```javascript
-import XMLParser, { ParseError, ErrorCode } from '@nodable/flexible-xml-parser';
-
-try {
-  parser.parse(xml);
-} catch (e) {
-  if (e instanceof ParseError) {
-    console.error(e.code, e.line, e.col, e.message);
-    // e.g. 'MISMATCHED_CLOSE_TAG' 4 12 'Expected </div>, got </span>'
-  } else {
-    throw e;
-  }
-}
-```
-
-All error codes are available on the `ErrorCode` constant for exhaustive matching without string literals.
-
-## Custom entities
-
-```javascript
-parser.addEntity('copy', '©');
-parser.addEntity('trade', '™');
-// requires entityParseOptions.external: true (default)
-```
-
-## TypeScript
-
-```typescript
-import XMLParser, { X2jOptions, CompactObjBuilder, BaseOutputBuilder, ElementType } from '@nodable/flexible-xml-parser';
-
-const options: X2jOptions = {
-  skip:    { attributes: false, nsPrefix: true },
-  nameFor: { cdata: '#cdata' },
-  limits:  { maxNestedTags: 100 },
-};
-
-const parser = new XMLParser(options);
-```
+| File | Topic |
+|---|---|
+| [`docs/01-getting-started.md`](./docs/01-getting-started.md) | Installation, quick start, common patterns |
+| [`docs/02-options.md`](./docs/02-options.md) | Full options reference |
+| [`docs/03-value-parsers.md`](./docs/03-value-parsers.md) | Value parser pipeline, built-ins, custom parsers |
+| [`docs/04-stop-nodes.md`](./docs/04-stop-nodes.md) | Stop nodes and skip tags |
+| [`docs/05-output-builders.md`](./docs/05-output-builders.md) | Built-in and custom output builders |
+| [`docs/06-streaming.md`](./docs/06-streaming.md) | Stream, feed/end, and memory characteristics |
+| [`docs/07-auto-close.md`](./docs/07-auto-close.md) | Lenient HTML parsing and error collection |
+| [`docs/08-security.md`](./docs/08-security.md) | Security, DoS limits, prototype pollution |
+| [`docs/09-path-expressions.md`](./docs/09-path-expressions.md) | Path expression syntax for stop nodes, skip, exitIf |
+| [`docs/10-typescript.md`](./docs/10-typescript.md) | TypeScript usage and type definitions |
 
 ## License
 

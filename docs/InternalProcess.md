@@ -1,4 +1,14 @@
 
+### Core Components
+
+| Component | Role |
+|-----------|------|
+| `XMLParser` | Public entry point — manages options, exposes all APIs |
+| `Xml2JsParser` | Core parsing engine — tokenises XML, drives the OutputBuilder |
+| `OutputBuilder` | Assembles the JS result from parse events; owns the value parser chain |
+| `DocTypeReader` | Reads DOCTYPE declarations, respects `doctypeOptions` read-time limits |
+
+### Flow
 
 When the parser is reading the data, it marks the start of each unit, and flushes everything before it once it completes successfully.
 
