@@ -5,7 +5,7 @@ import { ParseError, ErrorCode } from './ParseError.js';
  *
  * Import these in your parser config to compose skipEnclosures arrays:
  *
- *   import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+ *   import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
  *
  *   stopNodes: [
  *     "..script",                                              // plain — no enclosures (default)

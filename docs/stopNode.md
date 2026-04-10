@@ -37,7 +37,7 @@ Each stop-node entry can be an object with an explicit `skipEnclosures` array in
 string.  This lets you control exactly which enclosures are respected, on a per-tag basis.
 
 ```js
-import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
 
 const parser = new XMLParser({
   tags: {
@@ -59,7 +59,7 @@ const parser = new XMLParser({
 ### `skipEnclosures` is an array of `{ open, close }` pairs
 
 ```js
-import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
 
 // xmlEnclosures — XML structural delimiters (the default)
 const xmlEnclosures = [

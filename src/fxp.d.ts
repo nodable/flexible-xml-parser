@@ -9,7 +9,7 @@ import { BaseOutputBuilderFactory } from "@nodable/base-output-builder"
  * tracking and enclosure skipping when scanning for the closing tag.
  *
  * ```ts
- * import { xmlEnclosures } from 'flex-xml-parser';
+ * import { xmlEnclosures } from '@nodable/flexible-xml-parser';
  *
  * const parser = new XMLParser({
  *   skip: {
@@ -68,7 +68,7 @@ export interface SkipOptions {
    * Supports path-expression-matcher syntax. Default: []
    *
    * @example
-   * import { xmlEnclosures } from 'flex-xml-parser';
+   * import { xmlEnclosures } from '@nodable/flexible-xml-parser';
    *
    * skip: {
    *   tags: [
@@ -130,7 +130,7 @@ export interface Enclosure {
  * enclosures the processor should skip when scanning for the closing tag.
  *
  * ```ts
- * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+ * import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
  *
  * const parser = new XMLParser({
  *   tags: {
@@ -176,7 +176,7 @@ export interface TagOptions {
    * Supports path-expression-matcher syntax. Default: []
    *
    * @example
-   * import { xmlEnclosures, quoteEnclosures } from 'flex-xml-parser';
+   * import { xmlEnclosures, quoteEnclosures } from '@nodable/flexible-xml-parser';
    *
    * stopNodes: [
    *   "..script",                                              // plain
