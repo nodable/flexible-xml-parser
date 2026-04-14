@@ -1,5 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
-import { numberParser, EntitiesValueParser } from "@nodable/base-output-builder";
+import { numberParser } from "@nodable/base-output-builder";
+import EntitiesReplacer, { COMMON_HTML, CURRENCY_ENTITIES } from "@nodable/entities";
 import { CompactBuilderFactory } from "@nodable/compact-builder";
 
 describe("Value Parsers", function () {
@@ -80,7 +81,7 @@ describe("Value Parsers", function () {
   });
 
   it("should expand DOCTYPE entities via the 'entity' ValueParser (default)", function () {
-    const evp = new EntitiesValueParser({
+    const evp = new EntitiesReplacer({
       docType: true
     });
     const builder = new CompactBuilderFactory();
@@ -105,7 +106,7 @@ describe("Value Parsers", function () {
   });
 
   it("should expand HTML entities when entityParseOptions.html is true", function () {
-    const evp = new EntitiesValueParser({ html: true });
+    const evp = new EntitiesReplacer({ system: { ...COMMON_HTML, ...CURRENCY_ENTITIES } });
     const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }
       tags: { valueParsers: [evp, "number"] }
@@ -125,8 +126,8 @@ describe("Value Parsers", function () {
 
   it("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
 
-    const evp = new EntitiesValueParser({
-      html: true
+    const evp = new EntitiesReplacer({
+      system: COMMON_HTML
     });
     const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }

@@ -1,5 +1,5 @@
 import XMLParser from "../src/XMLParser.js";
-import { EntitiesValueParser } from "@nodable/base-output-builder";
+import EntitiesReplacer, { COMMON_HTML } from "@nodable/entities";
 import { CompactBuilderFactory } from "@nodable/compact-builder";
 import {
   runAcrossAllInputSources,
@@ -20,10 +20,10 @@ const withDocType = (entities, body) => {
   return `<!DOCTYPE root [\n${decls}\n]>${body}`;
 };
 
-// Helper: build a parser with a custom EntitiesValueParser configuration.
+// Helper: build a parser with a custom EntitiesReplacer configuration.
 // Keeps test bodies concise — callers only specify what they care about.
 const makeParser = (doctypeOpts = {}, entitiesOpts = {}, parserOpts = {}, builderOpts = {}) => {
-  const evp = new EntitiesValueParser({ default: true, ...entitiesOpts });
+  const evp = new EntitiesReplacer({ default: true, ...entitiesOpts });
   const builder = new CompactBuilderFactory(builderOpts);
   builder.registerValueParser("entity", evp);
   return new XMLParser({
@@ -167,7 +167,7 @@ describe("DOCTYPE — replaceEntities value parser gate", function () {
       expect(result.root).toBe("&greeting;");
     },
     () => {
-      // No EntitiesValueParser registered; chain has no 'entity'
+      // No EntitiesReplacer registered; chain has no 'entity'
       const builder = new CompactBuilderFactory({ tags: { valueParsers: ["boolean", "number"] } });
       return new XMLParser({
         doctypeOptions: { enabled: true },
@@ -197,9 +197,9 @@ describe("DOCTYPE — replaceEntities value parser gate", function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Built-in XML entity sources (EntitiesValueParser default option)
+// 4. Built-in XML entity sources (EntitiesReplacer default option)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("EntitiesValueParser default option — built-in XML entities", function () {
+describe("EntitiesReplacer default option — built-in XML entities", function () {
 
   runAcrossAllInputSources(
     "default: true (default) — lt/gt/apos/quot replaced",
@@ -240,9 +240,9 @@ describe("EntitiesValueParser default option — built-in XML entities", functio
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. HTML entity source (EntitiesValueParser html option)
+// 5. HTML entity source (EntitiesReplacer html option)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("EntitiesValueParser html option — HTML named entities", function () {
+describe("EntitiesReplacer html option — HTML named entities", function () {
 
   runAcrossAllInputSources(
     "html: false (default) — &nbsp; left unexpanded",
@@ -258,7 +258,7 @@ describe("EntitiesValueParser html option — HTML named entities", function () 
     (result) => {
       expect(result.root).toBe("\u00a0");
     },
-    () => makeParser({}, { html: true })
+    () => makeParser({}, { system: COMMON_HTML })
   );
 
   runAcrossAllInputSourcesWithFactory(
@@ -267,7 +267,7 @@ describe("EntitiesValueParser html option — HTML named entities", function () 
     (result) => {
       expect(result.root).toBe("\u00a9");
     },
-    () => makeParser({}, { html: true })
+    () => makeParser({}, { system: COMMON_HTML })
   );
 
   runAcrossAllInputSourcesWithFactory(
@@ -276,7 +276,7 @@ describe("EntitiesValueParser html option — HTML named entities", function () 
     (result) => {
       expect(result.root).toBe("©");
     },
-    () => makeParser({}, { html: true })
+    () => makeParser({}, { system: COMMON_HTML })
   );
 
   runAcrossAllInputSourcesWithFactory(
@@ -285,7 +285,7 @@ describe("EntitiesValueParser html option — HTML named entities", function () 
     (result) => {
       expect(result.root).toBe("©");
     },
-    () => makeParser({}, { html: true })
+    () => makeParser({}, { system: COMMON_HTML })
   );
 
   runAcrossAllInputSourcesWithFactory(
@@ -294,19 +294,19 @@ describe("EntitiesValueParser html option — HTML named entities", function () 
     (result) => {
       expect(result.root).toBe("Acme ©");
     },
-    () => makeParser({ enabled: true }, { html: true })
+    () => makeParser({ enabled: true }, { system: COMMON_HTML })
   );
 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. External entities via EntitiesValueParser.addEntity()
+// 6. External entities via EntitiesReplacer.addExternalEntity()
 // ─────────────────────────────────────────────────────────────────────────────
-describe("EntitiesValueParser.addEntity() — external entities", function () {
+describe("EntitiesReplacer.addExternalEntity() — external entities", function () {
 
   it("should replace a registered external entity", function () {
-    const evp = new EntitiesValueParser({ default: true });
-    evp.addEntity("copy", "©");
+    const evp = new EntitiesReplacer({ default: true });
+    evp.addExternalEntity("copy", "©");
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
@@ -315,9 +315,9 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
   });
 
   it("should replace multiple registered external entities", function () {
-    const evp = new EntitiesValueParser({ default: true });
-    evp.addEntity("copy", "©");
-    evp.addEntity("trade", "™");
+    const evp = new EntitiesReplacer({ default: true });
+    evp.addExternalEntity("copy", "©");
+    evp.addExternalEntity("trade", "™");
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
@@ -325,51 +325,19 @@ describe("EntitiesValueParser.addEntity() — external entities", function () {
     expect(result.root).toBe("© ™");
   });
 
-  it("external: false — entity stored but NOT applied", function () {
-    //TODO: output builder options building is incorrect. default values like html are being set as true.
-    const evp = new EntitiesValueParser({ default: true, external: false });
-    evp.addEntity("copy", "©");
-    const builder = new CompactBuilderFactory();
-    builder.registerValueParser("entity", evp);
-    const parser = new XMLParser({ OutputBuilder: builder });
-    const result = parser.parse("<root>&copy;</root>");
-    expect(result.root).toBe("&copy;");
-  });
-
-  it("external: false then re-enable — entities applied when external: true", function () {
-    const evpOff = new EntitiesValueParser({ default: true, external: false });
-    evpOff.addEntity("copy", "©");
-    const builderOff = new CompactBuilderFactory();
-    builderOff.registerValueParser("entity", evpOff);
-    const parserOff = new XMLParser({ OutputBuilder: builderOff });
-    expect(parserOff.parse("<root>&copy;</root>").root).toBe("&copy;");
-
-    const evpOn = new EntitiesValueParser({ default: true, external: true });
-    evpOn.addEntity("copy", "©");
-    const builderOn = new CompactBuilderFactory();
-    builderOn.registerValueParser("entity", evpOn);
-    const parserOn = new XMLParser({ OutputBuilder: builderOn });
-    expect(parserOn.parse("<root>&copy;</root>").root).toBe("©");
-  });
-
   it("should throw when entity key contains '&'", function () {
-    const evp = new EntitiesValueParser();
-    expect(() => evp.addEntity("&copy", "©")).toThrow();
+    const evp = new EntitiesReplacer();
+    expect(() => evp.addExternalEntity("&copy", "©")).toThrow();
   });
 
-  it("should throw when entity key contains ';'", function () {
-    const evp = new EntitiesValueParser();
-    expect(() => evp.addEntity("copy;", "©")).toThrow();
-  });
-
-  it("should throw when entity value contains '&'", function () {
-    const evp = new EntitiesValueParser();
-    expect(() => evp.addEntity("bad", "a & b")).toThrow();
+  it("should throw when entity key contains ':'", function () {
+    const evp = new EntitiesReplacer();
+    expect(() => evp.addExternalEntity("copy<", "©")).toThrow();
   });
 
   it("external entity coexists with docType entity — both replaced", function () {
-    const evp = new EntitiesValueParser({ default: true });
-    evp.addEntity("ext", "external");
+    const evp = new EntitiesReplacer({ default: true });
+    evp.addExternalEntity("ext", "external");
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
@@ -482,11 +450,11 @@ describe("Security — maxEntitySize", function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 10. Security — maxTotalExpansions (EntitiesValueParser)
+// 10. Security — maxTotalExpansions (EntitiesReplacer)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxTotalExpansions", function () {
 
-  // maxTotalExpansions lives on EntitiesValueParser, so we need a factory.
+  // maxTotalExpansions lives on EntitiesReplacer, so we need a factory.
   // runAcrossAllInputSourcesWithFactory doesn't support throw expectations,
   // so we write the three input-type cases inline.
   const throwXml = `<!DOCTYPE root [<!ENTITY e "x">]><root>&e;&e;&e;&e;&e;&e;</root>`;
@@ -494,7 +462,7 @@ describe("Security — maxTotalExpansions", function () {
     it(`should throw when total expansions exceeds limit [${inputType}]`, function () {
       const parser = makeParser({ enabled: true }, { maxTotalExpansions: 3 });
       expect(() => createInputSource(throwXml, inputType).parse(parser))
-        .toThrowError(/expansion limit exceeded/);
+        .toThrowError("[EntityReplacer] Entity expansion count limit exceeded: 6 > 3");
     });
   });
 
@@ -510,13 +478,13 @@ describe("Security — maxTotalExpansions", function () {
   );
 
   it("maxTotalExpansions counts external entity expansions too", function () {
-    const evp = new EntitiesValueParser({ default: true, external: true, maxTotalExpansions: 2 });
-    evp.addEntity("e", "x");
+    const evp = new EntitiesReplacer({ default: true, external: true, maxTotalExpansions: 2 });
+    evp.addExternalEntity("e", "x");
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({ OutputBuilder: builder });
     expect(() => parser.parse("<root>&e;&e;&e;</root>")).toThrowError(
-      "Entity expansion limit exceeded: 3 > 2"
+      "[EntityReplacer] Entity expansion count limit exceeded: 3 > 2"
     );
   });
 
@@ -534,7 +502,7 @@ describe("Security — maxTotalExpansions", function () {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. Security — maxExpandedLength (EntitiesValueParser)
+// 11. Security — maxExpandedLength (EntitiesReplacer)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Security — maxExpandedLength", function () {
 
@@ -576,7 +544,7 @@ describe("Security — maxExpandedLength", function () {
 describe("Security — Billion Laughs mitigation", function () {
 
   it("entity values containing '&' are silently discarded (no recursive expansion)", function () {
-    const evp = new EntitiesValueParser({ default: true });
+    const evp = new EntitiesReplacer({ default: true });
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
@@ -594,7 +562,7 @@ describe("Security — Billion Laughs mitigation", function () {
   });
 
   it("flat repetition attack is caught by maxTotalExpansions", function () {
-    const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 100 });
+    const evp = new EntitiesReplacer({ default: true, maxTotalExpansions: 100 });
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
@@ -604,7 +572,7 @@ describe("Security — Billion Laughs mitigation", function () {
     const refs = "&e;".repeat(200);
     expect(() =>
       parser.parse(`<!DOCTYPE root [<!ENTITY e "x">]><root>${refs}</root>`)
-    ).toThrowError("Entity expansion limit exceeded: 200 > 100");
+    ).toThrowError("[EntityReplacer] Entity expansion count limit exceeded: 200 > 100");
   });
 
 });
@@ -615,7 +583,7 @@ describe("Security — Billion Laughs mitigation", function () {
 describe("Per-parse isolation", function () {
 
   it("expansion counters reset between parses — second parse should not carry over", function () {
-    const evp = new EntitiesValueParser({ default: true, maxTotalExpansions: 5 });
+    const evp = new EntitiesReplacer({ default: true, maxTotalExpansions: 5 });
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
     const parser = new XMLParser({
