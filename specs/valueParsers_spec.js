@@ -1,6 +1,6 @@
 import XMLParser from "../src/XMLParser.js";
 import { numberParser } from "@nodable/base-output-builder";
-import EntitiesReplacer, { COMMON_HTML, CURRENCY_ENTITIES } from "@nodable/entities";
+import { EntityDecoder, COMMON_HTML, CURRENCY } from "@nodable/entities";
 import { CompactBuilderFactory } from "@nodable/compact-builder";
 
 describe("Value Parsers", function () {
@@ -73,6 +73,23 @@ describe("Value Parsers", function () {
   });
 
   // ── Entity expansion via ValueParser ─────────────────────────────────────
+});
+
+
+
+describe("Entity Parser", function () {
+  class EntityParser extends EntityDecoder {
+    constructor(options) {
+      super(options);
+    }
+
+    parse(val) {
+      if (typeof val === 'string') {
+        val = this.decode(val);
+      }
+      return val;
+    }
+  }
 
   it("should expand XML entities via the 'entity' ValueParser (default)", function () {
     const parser = new XMLParser();
@@ -81,9 +98,8 @@ describe("Value Parsers", function () {
   });
 
   it("should expand DOCTYPE entities via the 'entity' ValueParser (default)", function () {
-    const evp = new EntitiesReplacer({
-      docType: true
-    });
+
+    const evp = new EntityParser();
     const builder = new CompactBuilderFactory();
     builder.registerValueParser("entity", evp);
 
@@ -106,13 +122,14 @@ describe("Value Parsers", function () {
   });
 
   it("should expand HTML entities when entityParseOptions.html is true", function () {
-    const evp = new EntitiesReplacer({ system: { ...COMMON_HTML, ...CURRENCY_ENTITIES } });
+    const evp = new EntityParser({ namedEntities: { ...COMMON_HTML, ...CURRENCY } });
     const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }
       tags: { valueParsers: [evp, "number"] }
       // tags: { valueParsers: ["entity", "number"] }
     });
 
+    //this is need so that doctype entities can be set and xml version at runtime
     builder.registerValueParser("entity", evp);
 
     const parser = new XMLParser({
@@ -120,14 +137,15 @@ describe("Value Parsers", function () {
       OutputBuilder: builder,
     });
     const result = parser.parse(`<root><c>&copy;</c><p>&pound;</p></root>`);
+    // console.log(result)
     expect(result.root.c).toBe("©");
     expect(result.root.p).toBe("£");
   });
 
   it("should expand HTML entities in attributes when entityParseOptions.html is true", function () {
 
-    const evp = new EntitiesReplacer({
-      system: COMMON_HTML
+    const evp = new EntityParser({
+      namedEntities: { ...COMMON_HTML, ...CURRENCY }
     });
     const builder = new CompactBuilderFactory({
       // attributes: { valueParsers: ['entity'] }
@@ -144,8 +162,73 @@ describe("Value Parsers", function () {
     expect(result.root["@_label"]).toBe("© 2024");
   });
 
-  // ── Custom chain ──────────────────────────────────────────────────────────
+  it("should expand NCR entities as per XML version 1.0", function () {
 
+    let version = "";
+    class EntityParserNCR extends EntityParser {
+      constructor(options) {
+        super(options);
+      }
+
+      setXmlVersion(v) {
+        version = Number(v);
+        super.setXmlVersion(version);
+      }
+    }
+
+    const evp = new EntityParserNCR({ ncr: { onNcr: 'allow' } });
+    const builder = new CompactBuilderFactory({
+      // attributes: { valueParsers: ['entity'] }
+      attributes: { valueParsers: [evp] }
+    });
+
+    builder.registerValueParser("entity", evp);
+
+    const parser = new XMLParser({
+      skip: { attributes: false },
+      OutputBuilder: builder,
+    });
+    const result = parser.parse(`<?xml version="1.0"?><root label="&#x1;2024"/>`);
+    expect(version).toBe(1.0);
+    expect(result.root["@_label"]).toBe("2024");
+  });
+
+  it("should expand NCR entities as per XML version 1.1", function () {
+
+    let version = "";
+    class EntityParserNCR extends EntityParser {
+      constructor(options) {
+        super(options);
+      }
+
+      setXmlVersion(v) {
+        version = Number(v);
+        super.setXmlVersion(version);
+      }
+    }
+
+    const evp = new EntityParserNCR({ ncr: { onNCR: 'allow' } });
+    const builder = new CompactBuilderFactory({
+      // attributes: { valueParsers: ['entity'] }
+      attributes: { valueParsers: [evp] }
+    });
+
+    builder.registerValueParser("entity", evp);
+
+    const parser = new XMLParser({
+      skip: { attributes: false },
+      OutputBuilder: builder,
+    });
+    const result = parser.parse(`<?xml version="1.1"?><root label="&#x1;2024"/>`);
+
+    expect(version).toBe(1.1);
+    expect(result.root["@_label"].charCodeAt(0)).toBe(1);    // U+0001 (SOH)
+    expect(result.root["@_label"].substring(1)).toBe("2024"); // Rest of the strin
+    // expect(result.root["@_label"]).toBe("2024");
+  });
+});
+
+describe("Custom chain", () => {
   it("should use a fully custom valueParsers chain with replaceEntities", function () {
     const xmlData = `
       <root>
