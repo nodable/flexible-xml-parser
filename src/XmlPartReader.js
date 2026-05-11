@@ -1,7 +1,7 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { collectRawAttributes } from './AttributeProcessor.js';
-import { isName } from "./util.js"
+import { isName, isSpace } from "./util.js"
 // Re-export flushAttributes so Xml2JsParser and XmlSpecialTagsReader can
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
@@ -157,15 +157,16 @@ function buildTagExpObj(exp, parser) {
   let attrsExp = "";
   let i = 0;
 
-  for (; i < expLen; i++) {
-    if (exp[i] === " ") {
+  for (; i < exp.length; i++) {
+    const c = exp[i];
+    if (isSpace(c)) {
       tagExp.tagName = exp.substring(0, i);
       attrsExp = exp.substring(i + 1);
       break;
     }
   }
   //only tag
-  if (tagExp.tagName.length === 0 && i === expLen) tagExp.tagName = exp;
+  if (tagExp.tagName.length === 0 && i === exp.length) tagExp.tagName = exp;
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
 
@@ -178,6 +179,7 @@ function buildTagExpObj(exp, parser) {
   if (!parser.options.skip.attributes && attrsExp.length > 0) {
     collectRawAttributes(attrsExp, parser, tagExp);
   }
-
+  // console.log(tagExp)
   return tagExp;
 }
+

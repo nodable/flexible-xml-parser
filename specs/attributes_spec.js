@@ -1,5 +1,10 @@
 import XMLParser from "../src/XMLParser.js";
-import { runAcrossAllInputSources } from "./helpers/testRunner.js";
+import {
+  runAcrossAllInputSources,
+  xrunAcrossAllInputSources,
+  frunAcrossAllInputSources
+
+} from "./helpers/testRunner.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Default behaviour — attributes skipped
@@ -338,6 +343,37 @@ describe("Attributes — mixed with text content", function () {
       expect(result.outer["@_id"]).toBe(1);
       expect(result.outer.inner["@_id"]).toBe(2);
       expect(result.outer.inner["#text"]).toBe("value");
+    },
+    { skip: { attributes: false } }
+  );
+});
+
+describe("Attributes — nfr", function () {
+  runAcrossAllInputSources(
+    "should remove space from tag expression but not from atttibute value",
+    `<rootNode\tabc='\t23' />`,
+    (result) => {
+      const expected = {
+        "rootNode": {
+          "@_abc": 23
+        }
+      }
+      expect(result).toEqual(expected);
+    },
+    { skip: { attributes: false } }
+  );
+
+  frunAcrossAllInputSources( //Not working for feedable (issues are in parseAttributes)
+    "should allow very long tag expression",
+    `<rootNode ${'a="b" '.repeat(1000000)} />`,
+    (result) => {
+      const expected = {
+        "rootNode": {
+          "@_a": "b"
+        }
+      }
+
+      expect(result).toEqual(expected);
     },
     { skip: { attributes: false } }
   );

@@ -26,6 +26,15 @@ export const isName = function (string) {
   return !(match === null || typeof match === 'undefined');
 }
 
+export function isSpace(char) {
+  return char === " " || char === "\t" || char === "\n" || char === "\r" || char === "\f";
+}
+
+
+export function isSpaceCode(code) {
+  return code === 32 || code === 9 || code === 10 || code === 13 || code === 12; // space \t \n \r \f
+}
+
 export function isExist(v) {
   return typeof v !== 'undefined';
 }
