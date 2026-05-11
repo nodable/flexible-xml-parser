@@ -132,6 +132,7 @@ export const defaultOptions = {
     maxBufferSize: 10 * 1024 * 1024,
     autoFlush: true,
     flushThreshold: 1024,
+    bufferSize: 256
   },
 
   // --- exitIf ---

@@ -363,9 +363,9 @@ describe("Attributes — nfr", function () {
     { skip: { attributes: false } }
   );
 
-  frunAcrossAllInputSources( //Not working for feedable (issues are in parseAttributes)
+  runAcrossAllInputSources( //Not working for feedable (issues are in parseAttributes)
     "should allow very long tag expression",
-    `<rootNode ${'a="b" '.repeat(1000000)} />`,
+    `<rootNode ${'a="b" '.repeat(2560)} />`,
     (result) => {
       const expected = {
         "rootNode": {

@@ -13,6 +13,10 @@ export default class XMLParser {
     this._feedParser = null;
     this._feedSource = null;
     this._isFeeding = false;
+
+    // ── Batching state ──────────────────────────────────
+    this._pendingBytes = 0;
+    this._batchThreshold = this.options.feedable?.bufferSize;
   }
 
   // ─── One-shot parse methods ───────────────────────────────────────────────
@@ -126,6 +130,37 @@ export default class XMLParser {
 
   // ─── Incremental feed()/end() API ────────────────────────────────────────
 
+  _runParse() {
+    if (!this._feedParser) return;
+
+    const beforePos = this._feedSource.startIndex; // bytes consumed so far
+
+    try {
+      this._feedParser.parseXml();
+    } catch (err) {
+      if (err.code === ErrorCode.UNEXPECTED_END) {
+        this._feedSource.rewindToMark();
+      } else {
+        throw err;
+      }
+    }
+
+    const afterPos = this._feedSource.startIndex;
+    const didAdvance = afterPos > beforePos;
+
+    if (didAdvance) {
+      // Real progress made — reset threshold normally
+      this._pendingBytes = 0;
+    } else {
+      // Parser is stuck mid-token — grow the threshold to avoid
+      // hammering parseXml() until significantly more data arrives
+      this._batchThreshold = Math.min(
+        this._batchThreshold * 2,
+        this.options.feedable.maxBufferSize
+      );
+    }
+  }
+
   /**
    * Feed an XML data chunk for incremental parsing.
    *
@@ -160,20 +195,12 @@ export default class XMLParser {
     }
 
     this._feedSource.feed(str);
+    this._pendingBytes += str.length;
 
-    try {
-      this._feedParser.parseXml();
-    } catch (err) {
-      if (err.code === ErrorCode.UNEXPECTED_END) {
-        // Chunk boundary fell mid-token. Rewind to the token start so the
-        // incomplete bytes are re-parsed when the next chunk arrives.
-        this._feedSource.rewindToMark();
-      } else {
-        // Real parse error — clean up and propagate.
-        this._cleanupFeedSession();
-        throw err;
-      }
+    if (this._pendingBytes >= this._batchThreshold) {
+      this._runParse();
     }
+    // Otherwise, delay parsing until next feed() or end()
 
     return this;
   }
@@ -200,6 +227,9 @@ export default class XMLParser {
     if (!this._isFeeding) {
       throw new ParseError('No data fed. Call feed() before end().', ErrorCode.NOT_STREAMING);
     }
+
+    // Force a final parse (any pending bytes are now processed)
+    this._runParse();
 
     try {
       // Mark the source as complete so readers know there is no more data.

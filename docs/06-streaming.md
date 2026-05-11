@@ -96,6 +96,7 @@ new XMLParser({
     maxBufferSize:  10 * 1024 * 1024,  // 10 MB (default)
     autoFlush:      true,               // free processed chars automatically
     flushThreshold: 1024,              // processed bytes that trigger a flush
+    bufferSize: 256                   // size of buffer to be used for parsing
   }
 });
 ```
