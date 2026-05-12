@@ -2,8 +2,9 @@
 import { Expression } from "path-expression-matcher";
 import XMLParser from "../src/XMLParser.js";
 import { runAcrossAllInputSources, runAcrossAllInputSourcesWithException } from "./helpers/testRunner.js";
-import OutputBuilder from "../src/OutputBuilders/CompactObjBuilder.js";
-import { NodeTreeBuilder } from "../src/OutputBuilders/NodeTreeBuilder.js";
+import { skip } from "node:test";
+// import OutputBuilder from "@nodable/compact-builder";
+//import { NodeTreeBuilder } from "@nodable/node-tree-builder";
 
 
 describe("Temp", function () {
@@ -17,20 +18,11 @@ describe("Temp", function () {
   });
 
   fit("should stop at multiple stop nodes with feesable input source", function () {
-    const xmlData = `
-    
-    <root>
-      <stopNode>
-        <data>level 1</data>
-        <stopNode>
-          <data>level 2 - nested stopNode</data>
-        </stopNode>
-        <data>back to level 1</data>
-      </stopNode>
-    </root>`;
+    const xmlData = `<rootNode abc='\t23' />`;
 
     const parser = new XMLParser({
-      OutputBuilder: new NodeTreeBuilder()
+      skip: { attributes: false },
+      //OutputBuilder: new NodeTreeBuilder()
     });
     // for (let i = 0; i < xmlData.length; i++) {
     //   const ch = xmlData[i];
