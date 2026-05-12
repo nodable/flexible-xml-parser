@@ -1,5 +1,9 @@
 import XMLParser from "../src/XMLParser.js";
-import { runAcrossAllInputSources, runAcrossAllInputSourcesWithException } from "./helpers/testRunner.js";
+import {
+  runAcrossAllInputSources,
+  frunAcrossAllInputSources,
+  runAcrossAllInputSourcesWithException
+} from "./helpers/testRunner.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. XML declaration (<?xml ... ?>)
@@ -19,7 +23,7 @@ describe("Processing Instructions — XML declaration", function () {
     "should capture declaration attributes when skip.attributes is false",
     `<?xml version="1.0" encoding="UTF-8"?><root/>`,
     (result) => {
-      expect(result["?xml"]["@_version"]).toBe(1);
+      expect(result["?xml"]["@_version"]).toBe(1.0);
       expect(result["?xml"]["@_encoding"]).toBe("UTF-8");
     },
     { skip: { attributes: false } }

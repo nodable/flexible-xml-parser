@@ -45,9 +45,9 @@
   },
   "dependencies": {
     "@nodable/base-output-builder": "^1.0.5",
-    "@nodable/compact-builder": "^1.0.6",
+    "@nodable/compact-builder": "^1.0.8",
     "path-expression-matcher": "^1.5.0",
-    "strnum": "^2.2.2"
+    "xml-naming": "^0.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

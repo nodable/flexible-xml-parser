@@ -5,9 +5,10 @@ import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
 import { Expression, ExpressionSet, Matcher } from 'path-expression-matcher';
 import { readDocType } from './DocTypeReader.js';
-import { isName, DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
+import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 import AutoCloseHandler from './AutoCloseHandler.js';
 import { ParseError, ErrorCode } from './ParseError.js';
+import { name as isName, qName as isQName } from 'xml-naming';
 
 class TagDetail {
   /**
@@ -60,6 +61,7 @@ export default class Xml2JsParser {
     this.tagsStack = [];
     this._stopNodeProcessor = null;
     this._exitIfTriggered = false;
+    this.xmlVersion = '1.0';
 
     if (!this.matcher) {
       this.matcher = new Matcher();
@@ -476,7 +478,7 @@ export default class Xml2JsParser {
   processAttrName(attrName) {
     const options = this.options;
     attrName = resolveNsPrefix(attrName, options.skip.nsPrefix);
-    if (!isName(attrName)) { //TODO: make it optional
+    if (!isQName(attrName, this.xmlVersion)) { //TODO: make it optional
       throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
     }
     attrName = sanitizeName(attrName, options.onDangerousProperty);

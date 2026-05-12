@@ -36,11 +36,21 @@ export function readPiTag(parser) {
   parser.source.markTokenStart(1);
   //<? already consumed
   let tagExp = readPiExp(parser, "?>");
-  if (!tagExp) throw new ParseError(
-    "Invalid Pi Tag expression.",
-    ErrorCode.INVALID_TAG,
-    { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
-  );
+  if (!tagExp) {
+    throw new ParseError(
+      "Invalid Pi Tag expression.",
+      ErrorCode.INVALID_TAG,
+      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+    )
+  } else if (tagExp.tagName === "xml") {
+    // Read version from the declaration and store it on the parser for validators.
+    const version = tagExp.rawAttributes?.version;
+    if (version === '1.1') {
+      parser.xmlVersion = 1.1;
+    } else {
+      parser.xmlVersion = 1.0; // default
+    }
+  }
 
   // Flush attributes into the output builder's this.attributes accumulator
   // so addDeclaration() / addInstruction() pick them up, mirroring what readOpeningTag

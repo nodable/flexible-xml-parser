@@ -1,5 +1,5 @@
-import { isName } from './util.js';
 import { ParseError, ErrorCode } from './ParseError.js';
+import { name as isName, qName as isQName } from 'xml-naming';
 
 export function readDocType(parser) {
     parser.source.markTokenStart(1);
@@ -267,7 +267,7 @@ function readEntityExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    validateEntityName(entityName);
+    validateEntityName(entityName, parser.xmlVersion);
     skipSourceWhitespace(source);
 
     if (!source.canRead()) {
@@ -346,7 +346,7 @@ function readElementExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    if (!isName(elementName)) {
+    if (!isName(elementName, parser.xmlVersion)) {
         throw new ParseError(`Invalid element name: "${elementName}"`,
             ErrorCode.INVALID_TAG,
             { line: source.line, col: source.cols, index: source.startIndex });
@@ -434,7 +434,7 @@ function readNotationExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    validateEntityName(notationName);
+    validateEntityName(notationName, parser.xmlVersion);
     skipSourceWhitespace(source);
 
     // Need all 6 chars of "SYSTEM" / "PUBLIC" before we can classify
@@ -512,8 +512,8 @@ function skipSourceWhitespace(source) {
     }
 }
 
-function validateEntityName(name) {
-    if (isName(name)) return name;
+function validateEntityName(name, xmlVersion) {
+    if (isName(name, xmlVersion)) return name;
     throw new ParseError(
         `Invalid entity name "${name}"`,
         ErrorCode.ENTITY_INVALID_KEY,

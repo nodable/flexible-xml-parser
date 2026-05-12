@@ -1,7 +1,8 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { collectRawAttributes } from './AttributeProcessor.js';
-import { isName, isSpace } from "./util.js"
+import { isSpace } from "./util.js"
+import { name as isName, qName as isQName } from 'xml-naming';
 // Re-export flushAttributes so Xml2JsParser and XmlSpecialTagsReader can
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
@@ -170,7 +171,7 @@ function buildTagExpObj(exp, parser) {
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
 
-  if (!isName(tagExp.tagName)) {
+  if (!isQName(tagExp.tagName, parser.xmlVersion)) {
     throw new ParseError("Invalid tag name", ErrorCode.INVALID_TAG_NAME);
   }
 
