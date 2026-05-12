@@ -57,6 +57,38 @@ const parser = new XMLParser({
 
 ---
 
+## Nested
+
+By default, stop-node collection ends at the **first matching close tag**. But you can set `nested` flag to true to automatically skip the nested stop node.
+
+```javascript
+{ expression: 'root.raw', nested: true,   skipEnclosures: [] },
+```
+
+Eg
+
+```xml
+<root>
+  <raw>stop node</raw>
+  <raw>stop node <raw>nested stop node</raw></raw>
+</root>
+```
+
+If `nested:false` then above XML will error until auto close is enabled. Because 2nd stopnode will be set to `stop node <raw>nested stop node`
+
+If `nested:true` then above XML will be parsed as
+
+```js
+{
+  root: {
+    raw: [
+      "stop node",
+      "stop node <raw>nested stop node</raw>"
+    ]
+  }
+}
+```
+
 ## Skip Tags
 
 **Skip tags** drop a tag and its entire subtree from the output silently. Content is consumed but never forwarded to the output builder.

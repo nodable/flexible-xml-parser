@@ -283,6 +283,18 @@ export default class Xml2JsParser {
       this.source.startIndex,
     );
 
+    // Extract namespace prefix and local name from raw tag name (e.g. "ns:tag" → "ns", "tag").
+    // Always done from the raw name (tagExp.tagName), before processTagName strips the prefix,
+    // so these values are stable regardless of skip.nsPrefix.
+    const colonIdx = tagExp.tagName.indexOf(':');
+    const tagNamespace = colonIdx !== -1 ? tagExp.tagName.slice(0, colonIdx) : undefined;
+    // Local name for the matcher: prefix-free always (e.g. "code" from "ns:code").
+    // The matcher library tracks namespace separately via the 3rd push() argument —
+    // passing the full "ns:code" as the tag name would break ns::code expression matching.
+    const matcherTagName = tagNamespace !== undefined
+      ? tagExp.tagName.slice(colonIdx + 1)
+      : processedTagName;
+
     // ── Limit: maxNestedTags ─────────────────────────────────────────────────
     const maxNested = options.limits?.maxNestedTags;
     if (maxNested !== undefined && maxNested !== null) {
@@ -304,7 +316,7 @@ export default class Xml2JsParser {
       raeAttrLen = tagExp.rawAttributesLen;
     }
 
-    this.matcher.push(processedTagName, {});
+    this.matcher.push(matcherTagName, {}, tagNamespace);
     if (raeAttrLen > 0) {
       this.matcher.updateCurrent(rawAttributes);
     }
@@ -334,7 +346,10 @@ export default class Xml2JsParser {
       this.matcher.pop();
     } else if (stopNodeConfig) {
       // Create a fresh processor with the matching nested + skipEnclosures config.
-      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, {
+      // Raw tag name (tagExp.tagName) is used — the processor scans the source
+      // character-by-character and must match the prefix-as-written (e.g. "ns:code"),
+      // independent of what skip.nsPrefix does to the processed output name.
+      this._stopNodeProcessor = new StopNodeProcessor(tagExp.tagName, {
         nested: stopNodeConfig.nested,
         skipEnclosures: stopNodeConfig.skipEnclosures,
       });
@@ -351,7 +366,8 @@ export default class Xml2JsParser {
     } else if (skipTagConfig) {
       // Skip tag: collect raw content (to advance the source past the closing tag)
       // but call no output builder methods — the tag is silently dropped.
-      this._stopNodeProcessor = new StopNodeProcessor(processedTagName, {
+      // Raw tag name used for the same reason as the stop-node branch above.
+      this._stopNodeProcessor = new StopNodeProcessor(tagExp.tagName, {
         nested: skipTagConfig.nested,
         skipEnclosures: skipTagConfig.skipEnclosures,
       });

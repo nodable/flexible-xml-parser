@@ -812,5 +812,90 @@ describe("Stop Nodes — skipEnclosures", function () {
     expect(order[0]).toBe("callback");
     expect(result.root.s).toBe("content");
   });
+});
+
+describe("Stop Nodes — nested", function () {
+  it("should determine nested stop node", function () {
+    const xml = `<root><code>safe <code>nested</code> still raw</code></root>`;
+    const parser = new XMLParser({
+      tags: { stopNodes: [{ expression: "root.code", nested: true }] },
+    });
+
+    const expected = {
+      "root": {
+        "code": "safe <code>nested</code> still raw"
+      }
+    }
+    const result = parser.parse(xml);
+
+    // console.log(JSON.stringify(result, null, 4));
+    expect(result).toEqual(expected);
+  });
+
+  it("should determine nested stop node with namespace when nsPrefix is not skipped", function () {
+    const xml = `<root><ns:code>safe <ns:code>nested</ns:code> still raw</ns:code></root>`;
+    const parser = new XMLParser({
+      tags: { stopNodes: [{ expression: "root.ns::code", nested: true }] },
+    });
+
+    const expected = {
+      "root": {
+        "ns:code": "safe <ns:code>nested</ns:code> still raw"
+      }
+    }
+
+    const result = parser.parse(xml);
+    // console.log(JSON.stringify(result, null, 4));
+    expect(result).toEqual(expected);
+  });
+
+  it("should determine nested stop node with namespace when nsPrefix is not skipped and namespace is not used in expression", function () {
+    const xml = `<root><ns:code>safe <ns:code>nested</ns:code> still raw</ns:code></root>`;
+    const parser = new XMLParser({
+      tags: { stopNodes: [{ expression: "root.code", nested: true }] },
+    });
+
+    const expected = {
+      "root": {
+        "ns:code": "safe <ns:code>nested</ns:code> still raw"
+      }
+    }
+
+    const result = parser.parse(xml);
+    // console.log(JSON.stringify(result, null, 4));
+    expect(result).toEqual(expected);
+  });
+  it("should determine nested stop node with namespace when nsPrefix is skipped", function () {
+    const xml = `<root><ns:code>safe <ns:code>nested</ns:code> still raw</ns:code></root>`;
+    const parser = new XMLParser({
+      tags: { stopNodes: [{ expression: "root.ns::code", nested: true }] },
+      skip: { nsPrefix: true }
+    });
+
+    const expected = {
+      "root": {
+        "code": "safe <ns:code>nested</ns:code> still raw"
+      }
+    }
+    const result = parser.parse(xml);
+    // console.log(JSON.stringify(result, null, 4));
+    expect(result).toEqual(expected);
+  });
+  it("should determine nested stop node with namespace when nsPrefix is skipped and namespace is not used in expression", function () {
+    const xml = `<root><ns:code>safe <ns:code>nested</ns:code> still raw</ns:code></root>`;
+    const parser = new XMLParser({
+      tags: { stopNodes: [{ expression: "root.code", nested: true }] },
+      skip: { nsPrefix: true }
+    });
+
+    const expected = {
+      "root": {
+        "code": "safe <ns:code>nested</ns:code> still raw"
+      }
+    }
+    const result = parser.parse(xml);
+    // console.log(JSON.stringify(result, null, 4));
+    expect(result).toEqual(expected);
+  });
 
 });

@@ -54,3 +54,10 @@ parser.feed(`<b>hel<![CDATA[lo`);
 - `readUpto("]]>")` → scans to end of buffer, no `]]>` found → **throws `UNEXPECTED_END`**
 - Caught in `feed()` → `rewindToMark()` → `startIndex` resets to `<![CDATA[`
 - Buffer now retains from `<![CDATA[lo` onward
+
+
+### StopNode/SkipTag
+
+StopNodeProcessor receives the raw tag name (e.g. `ns:code`) so it can match closing tags exactly as they appear in the source, independent of skip.nsPrefix.
+
+The matcher is pushed with the local name only (e.g. `code`) and namespace separately (e.g. `"ns"`), satisfying the path-expression-matcher contract. This makes namespace optional in expressions — `"root.code"` matches regardless of namespace, while `"root.ns::code"` matches only that specific namespace.
