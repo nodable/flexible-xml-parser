@@ -1,7 +1,7 @@
 {
   "name": "@nodable/flexible-xml-parser",
-  "version": "1.2.1",
-  "description": "Fastest XML parser in pure JS with fully customizable ouput",
+  "version": "1.2.2",
+  "description": "Fastest and fully customizable XML parser in pure JS with fully customizable ouput",
   "main": "./lib/fxp.cjs",
   "type": "module",
   "sideEffects": false,
@@ -36,6 +36,8 @@
     "stream",
     "buffer",
     "bytes",
+    "fast-xml-parser",
+    "xml-naming",
     "path-expression-matcher"
   ],
   "author": "Amit Gupta (https://solothought.com)",

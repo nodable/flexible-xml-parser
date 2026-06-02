@@ -1,4 +1,7 @@
 
+**1.2.2 (2026-06-02)**
+- fix: cjs typings
+
 **1.2.1 (2026-05-28)**
 - update dependencies to fix duplicate entites
 - include fxp.cjs in npm package
