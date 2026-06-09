@@ -1,5 +1,9 @@
 # @nodable/flexible-xml-parser
 
+[![@nodable/flexible-xml-parser downloads](https://img.shields.io/npm/dw/@nodable/flexible-xml-parser.svg)](https://npm-compare.com/@nodable/flexible-xml-parser) 
+[![@nodable/flexible-xml-parser version](https://img.shields.io/npm/v/@nodable/flexible-xml-parser.svg)](https://www.npmjs.com/package/@nodable/flexible-xml-parser)
+[![@nodable/flexible-xml-parser license](https://img.shields.io/npm/l/@nodable/flexible-xml-parser.svg)](https://github.com/nodable/flexible-xml-parser)
+
 A high-performance, flexible XML parser in pure javascript for Node.js and browsers with pluggable output builders, composable value parsers, and multiple input modes.
 
 > From the creater of fast-xml-parser
