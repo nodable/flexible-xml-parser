@@ -1,4 +1,8 @@
 
+**1.3.0 (2026-06-16)**
+- support `skip.whitespaceText`
+- update base output builder for typings
+
 **1.2.2 (2026-06-02)**
 - fix: cjs typings
 
