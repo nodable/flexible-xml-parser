@@ -41,3 +41,5 @@ jspm_packages
 
 benchmark/package-lock.json
 benchmark/node_modules
+
+CLAUDE.md
