@@ -1,4 +1,7 @@
 
+**1.6.0 (2026-06-30)**
+- Pass xml declaration attributes to output builder irrespection of parser options.
+
 **1.5.0 (2026-06-30)**
 - TagDetail.index/line/col now points at '<' (not past '>')
 - TagDetail.openEnd — offset right after the opening tag's '>'

@@ -25,6 +25,8 @@
   },
   "keywords": [
     "xml",
+    "sax",
+    "html",
     "parser",
     "fast",
     "flexible",
