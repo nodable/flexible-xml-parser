@@ -48,6 +48,8 @@ export function readPiTag(parser) {
     if (version === '1.1') {
       parser.xmlDec.version = 1.1;
     }
+    parser.xmlDec.encoding = tagExp.rawAttributes?.encoding;
+    parser.xmlDec.standalone = tagExp.rawAttributes?.standalone;
   }
 
   // Flush attributes into the output builder's this.attributes accumulator

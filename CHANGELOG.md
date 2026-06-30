@@ -1,4 +1,7 @@
 
+**1.6.1 (2026-06-30)**
+- Pass xml declaration attributes to output builder irrespection of parser options.
+
 **1.6.0 (2026-06-30)**
 - Pass xml declaration attributes to output builder irrespection of parser options.
 
