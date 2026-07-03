@@ -267,7 +267,7 @@ function readEntityExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    validateEntityName(entityName, parser.xmlVersion);
+    validateEntityName(entityName, parser.xmlDec.version);
     skipSourceWhitespace(source);
 
     if (!source.canRead()) {
@@ -346,7 +346,7 @@ function readElementExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    if (!isName(elementName, parser.xmlVersion)) {
+    if (!isName(elementName, { xmlVersion: parser.xmlDec.version })) {
         throw new ParseError(`Invalid element name: "${elementName}"`,
             ErrorCode.INVALID_TAG,
             { line: source.line, col: source.cols, index: source.startIndex });
@@ -434,7 +434,7 @@ function readNotationExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    validateEntityName(notationName, parser.xmlVersion);
+    validateEntityName(notationName, parser.xmlDec.version);
     skipSourceWhitespace(source);
 
     // Need all 6 chars of "SYSTEM" / "PUBLIC" before we can classify
@@ -513,7 +513,7 @@ function skipSourceWhitespace(source) {
 }
 
 function validateEntityName(name, xmlVersion) {
-    if (isName(name, xmlVersion)) return name;
+    if (isName(name, { xmlVersion: xmlVersion })) return name;
     throw new ParseError(
         `Invalid entity name "${name}"`,
         ErrorCode.ENTITY_INVALID_KEY,

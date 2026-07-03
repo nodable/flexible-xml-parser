@@ -183,7 +183,7 @@ function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false) {
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
 
-  if (!isQName(tagExp.tagName, parser.xmlDec.version)) {
+  if (!isQName(tagExp.tagName, { xmlVersion: parser.xmlDec.version })) {
     throw new ParseError("Invalid tag name", ErrorCode.INVALID_TAG_NAME);
   }
 

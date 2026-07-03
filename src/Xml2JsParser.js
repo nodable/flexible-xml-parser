@@ -546,7 +546,7 @@ export default class Xml2JsParser {
   processAttrName(attrName) {
     const options = this.options;
     attrName = resolveNsPrefix(attrName, options.skip.nsPrefix);
-    if (!isQName(attrName, this.xmlDec.version)) { //TODO: make it optional
+    if (!isQName(attrName, { xmlVersion: this.xmlDec.version })) { //TODO: make it optional
       throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
     }
     attrName = sanitizeName(attrName, options.onDangerousProperty);
