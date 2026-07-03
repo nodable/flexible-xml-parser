@@ -50,6 +50,17 @@ export function readPiTag(parser) {
     }
     parser.xmlDec.encoding = tagExp.rawAttributes?.encoding;
     parser.xmlDec.standalone = tagExp.rawAttributes?.standalone;
+
+    // BUG FIX: getNameValidator('qName') was already called (and memoized)
+    // above the moment this PI tag's own name ("xml") got validated — before
+    // xmlDec.version was known, so it was always cached with the '1.0'
+    // default. Every subsequent tag/attribute name in the document —
+    // including the root element — would silently be checked against XML
+    // 1.0 rules even for a document declaring version="1.1". Reset the
+    // cache now that the real version is known; this runs at most once per
+    // document (a <?xml?> declaration can only appear once), so the cost is
+    // negligible.
+    parser._nameValidators = Object.create(null);
   }
 
   // Flush attributes into the output builder's this.attributes accumulator
