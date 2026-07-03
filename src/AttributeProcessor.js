@@ -30,9 +30,13 @@ import { isSpaceCode } from "./util.js"
 /**
  * Parse an attribute expression string into an array of match tuples.
  *
- * Each element has the same shape the old getAllMatches() returned so that
- * callers are unchanged:
- *   [fullMatch, name, '=value' | undefined, quote | undefined, value | undefined]
+ * Each element is `{ name, value, startIndex }` — `value` is `undefined` for
+ * a boolean attribute (no `=`). Earlier versions of this function also built
+ * a full-match string and an `'=value'` string per attribute (matching an
+ * old regex-based getAllMatches() return shape) — neither was ever read by
+ * collectRawAttributes()/flushAttributes() (only `name`, `value`, and
+ * `.startIndex` are), so building them was pure wasted string concatenation
+ * on every attribute, on every tag. Dropped.
  *
  * The implementation is a single O(n) pass over char codes with no regex and
  * no recursion, making it safe for arbitrarily long attribute strings.
@@ -44,7 +48,7 @@ import { isSpaceCode } from "./util.js"
  *   IN_VALUE   — inside a quoted value, accumulating until the closing quote
  *
  * @param {string} attrStr
- * @returns {Array}  array of match tuples (see shape above)
+ * @returns {Array<{name: string, value: string|undefined, startIndex: number}>}
  */
 function parseAttributes(attrStr) {
   const results = [];
@@ -66,9 +70,7 @@ function parseAttributes(attrStr) {
 
     if (i >= len || attrStr.charCodeAt(i) !== 61) {
       // Boolean attribute — no '='
-      const m = [name, name, undefined, undefined, undefined];
-      m.startIndex = nameStart;
-      results.push(m);
+      results.push({ name, value: undefined, startIndex: nameStart });
       continue;
     }
 
@@ -81,7 +83,6 @@ function parseAttributes(attrStr) {
     const quote = attrStr.charCodeAt(i);
     if (quote === 34 || quote === 39) { // " or '
       i++; // skip opening quote
-      const valueStart = i;
       let value = '';
       let segStart = i;
       while (i < len && attrStr.charCodeAt(i) !== quote) {
@@ -94,10 +95,7 @@ function parseAttributes(attrStr) {
       }
       value += attrStr.substring(segStart, i);
       i++; // skip closing quote
-      const quoteChar = String.fromCharCode(quote);
-      const m = [name + '=' + quoteChar + value + quoteChar, name, '=' + quoteChar + value + quoteChar, quoteChar, value];
-      m.startIndex = nameStart;
-      results.push(m);
+      results.push({ name, value, startIndex: nameStart });
     }
   }
 
@@ -105,7 +103,20 @@ function parseAttributes(attrStr) {
 }
 
 /**
- * Pass 1: extract raw (unparsed) attribute values into rawAttributes.
+ * Pass 1: extract raw (unparsed) attribute values into rawAttributes, AND
+ * build tagExp._parsedAttrs — the processed-name/value list pass 2 will
+ * consume directly.
+ *
+ * Previously, pass 2 (flushAttributes) re-ran parseAttributes() from scratch
+ * on the same attrStr, and re-ran parser.processAttrName() (ns-prefix
+ * resolution + name validation + sanitizeName + reserved-name check) on
+ * every attribute a second time — full re-tokenization plus full re-validation
+ * of work already done here. processAttrName() is a pure function of
+ * (rawName, options) — nothing between pass 1 and pass 2 (matcher.push,
+ * stop/skip resolution) can change its result — so it's safe to compute once
+ * and cache. The matcher still gets the *raw* (pre-resolveNsPrefix/sanitize)
+ * name as its rawAttributes key, unchanged, since PEM's attribute-condition
+ * matching (`div[class=code]`) matches against attribute names as written.
  *
  * @param {string} attrStr      - raw attribute expression substring
  * @param {object} parser       - Xml2JsParser instance (for processAttrName)
@@ -116,56 +127,60 @@ export function collectRawAttributes(attrStr, parser, tagExp) {
 
   const matches = parseAttributes(attrStr);
   const len = matches.length;
+  tagExp._rawAttrMatchCount = len; // total parsed attrs, incl. dropped (xmlns:) ones — for maxAttributesPerTag parity with old behavior
+  const parsedAttrs = [];
   let count = 0;
   for (let i = 0; i < len; i++) {
-    const attrName = parser.processAttrName(matches[i][1]);
+    const m = matches[i];
+    const attrName = parser.processAttrName(m.name);
     if (attrName === false) continue;
     count++;
-    const rawVal = matches[i][4];
-    tagExp.rawAttributes[matches[i][1]] = rawVal !== undefined ? rawVal : true;
+    const rawVal = m.value;
+    const attrVal = rawVal !== undefined ? rawVal : true;
+    tagExp.rawAttributes[m.name] = attrVal;
+    parsedAttrs.push({ name: attrName, value: attrVal, index: m.startIndex });
   }
   tagExp.rawAttributesLen = count;
+  tagExp._parsedAttrs = parsedAttrs;
 }
 
 /**
- * Pass 2: run value parsers and push each attribute to the output builder.
+ * Pass 2: push each attribute (already parsed + name-processed by pass 1,
+ * see tagExp._parsedAttrs) to the output builder. No re-parsing, no
+ * re-running processAttrName — this is now a plain loop over cached data.
  *
- * @param {string} attrStr - raw attribute expression substring
+ * @param {Array<{name: string, value: *, index: number}>} parsedAttrs - tagExp._parsedAttrs from collectRawAttributes
  * @param {object} parser  - Xml2JsParser instance
- * @param {number} [attrsExpStart] - absolute document offset where `attrStr`
- *   begins (tagExp._attrsExpStart from buildTagExpObj). When provided, each
+ * @param {number} [attrsExpStart] - absolute document offset where the
+ *   attribute expression began (tagExp._attrsExpStart). When provided, each
  *   attribute's absolute document index is computed and passed to
  *   addAttribute() as a 4th argument: { index }. Line/col are intentionally
  *   NOT computed here — doing so would require re-scanning attrStr for
  *   newlines on every call, for a field most builders won't use; callers
  *   that need it can derive line/col from `index` plus the document text.
+ * @param {number} rawAttrMatchCount - tagExp._rawAttrMatchCount, used for the
+ *   maxAttributesPerTag limit check (counts all parsed attrs, including any
+ *   dropped by processAttrName, matching the limit's pre-existing semantics).
  */
-export function flushAttributes(attrStr, parser, attrsExpStart) {
-  if (!attrStr || attrStr.length === 0) return;
-  const matches = parseAttributes(attrStr);
-  const len = matches.length;
+export function flushAttributes(parsedAttrs, parser, attrsExpStart, rawAttrMatchCount) {
+  if (!parsedAttrs || parsedAttrs.length === 0) return;
 
   const maxAttrs = parser.options.limits?.maxAttributesPerTag;
-  if (maxAttrs !== undefined && maxAttrs !== null && len > maxAttrs) {
+  if (maxAttrs !== undefined && maxAttrs !== null && rawAttrMatchCount > maxAttrs) {
     const tagName = parser.currentTagDetail?.name ?? '(unknown)';
     throw new ParseError(
-      `Tag '${tagName}' has ${len} attributes, exceeding limit of ${maxAttrs}`,
+      `Tag '${tagName}' has ${rawAttrMatchCount} attributes, exceeding limit of ${maxAttrs}`,
       ErrorCode.LIMIT_MAX_ATTRIBUTES,
       { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
     );
   }
 
+  const len = parsedAttrs.length;
   for (let i = 0; i < len; i++) {
-    const attrName = parser.processAttrName(matches[i][1]);
-    if (attrName === false) continue;
-
-    const rawVal = matches[i][4];
-    const attrVal = rawVal !== undefined ? rawVal : true;
-
+    const a = parsedAttrs[i];
     const attrMeta = attrsExpStart !== undefined
-      ? { index: attrsExpStart + matches[i].startIndex }
+      ? { index: attrsExpStart + a.index }
       : undefined;
-
-    parser.outputBuilder.addAttribute(attrName, attrVal, parser.readonlyMatcher, attrMeta);
+    parser.outputBuilder.addAttribute(a.name, a.value, parser.readonlyMatcher, attrMeta);
   }
 }

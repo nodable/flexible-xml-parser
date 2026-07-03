@@ -8,7 +8,7 @@ import { readDocType } from './DocTypeReader.js';
 import { DANGEROUS_PROPERTY_NAMES, criticalProperties } from './util.js';
 import AutoCloseHandler from './AutoCloseHandler.js';
 import { ParseError, ErrorCode } from './ParseError.js';
-import { name as isName, qName as isQName } from 'xml-naming';
+import { createValidator } from 'xml-naming';
 
 class TagDetail {
   /**
@@ -66,6 +66,14 @@ export default class Xml2JsParser {
     this.tagsStack = [];
     this._stopNodeProcessor = null;
     this._exitIfTriggered = false;
+    // Lazily-built, memoized xml-naming validators (v0.3.0 createValidator).
+    // Lazy because xmlDec.version isn't final until the optional <?xml?>
+    // declaration (if any) has been read — which happens after this method
+    // runs but before any tag name is ever validated. Reset here (once per
+    // document/session, see XMLParser._createParser / feed() call sites) so
+    // a reused Xml2JsParser instance never validates against a stale
+    // xmlVersion or leaks one document's name cache into the next.
+    this._nameValidators = Object.create(null);
     this.xmlDec = {
       version: 1.0,
       lang: null,
@@ -365,7 +373,7 @@ export default class Xml2JsParser {
     const skipTagConfig = stopNodeConfig ? null : this.isSkipTag();
 
     if (!options.skip.attributes && !skipTagConfig) {
-      flushAttributes(tagExp._attrsExp, this, tagExp._attrsExpStart);
+      flushAttributes(tagExp._parsedAttrs, this, tagExp._attrsExpStart, tagExp._rawAttrMatchCount);
     }
 
     // Stop-node and skip-tag checks AFTER attributes are set so attribute conditions work.
@@ -543,10 +551,34 @@ export default class Xml2JsParser {
     }
   }
 
+  /**
+   * Returns a memoized xml-naming validator for the given production
+   * ('qName' for tag/attribute names, 'name' for DOCTYPE entity/element/
+   * notation names), built lazily on first use and cached per parser
+   * instance for the rest of the document/session.
+   *
+   * xmlDec.version is stored as a number (1.0 / 1.1) but xml-naming's
+   * xmlVersion option is the string '1.0'/'1.1' — normalized here rather
+   * than changing xmlDec's public shape (it's forwarded as-is to
+   * outputBuilder.addDeclaration(), so its type is part of the builder
+   * contract, not just an internal detail).
+   *
+   * @param {'name'|'qName'} production
+   */
+  getNameValidator(production) {
+    let validator = this._nameValidators[production];
+    if (!validator) {
+      const xmlVersion = this.xmlDec.version === 1.1 || this.xmlDec.version === '1.1' ? '1.1' : '1.0';
+      validator = createValidator(production, { xmlVersion });
+      this._nameValidators[production] = validator;
+    }
+    return validator;
+  }
+
   processAttrName(attrName) {
     const options = this.options;
     attrName = resolveNsPrefix(attrName, options.skip.nsPrefix);
-    if (!isQName(attrName, { xmlVersion: this.xmlDec.version })) { //TODO: make it optional
+    if (!this.getNameValidator('qName')(attrName)) { //TODO: make it optional
       throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
     }
     attrName = sanitizeName(attrName, options.onDangerousProperty);

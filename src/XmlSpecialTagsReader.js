@@ -57,7 +57,7 @@ export function readPiTag(parser) {
   // does for regular tags. PI tags are not pushed onto the matcher, so no
   // updateCurrent() call is needed here.
   if (!skipOptions.attributes) {
-    flushAttributes(tagExp._attrsExp, parser, tagExp._attrsExpStart);
+    flushAttributes(tagExp._parsedAttrs, parser, tagExp._attrsExpStart, tagExp._rawAttrMatchCount);
   }
 
   if (tagExp.tagName === "xml") {
