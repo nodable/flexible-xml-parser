@@ -28,174 +28,37 @@ Be respectful, constructive, and professional in all interactions.
 # Install dependencies (currently minimal)
 npm install
 
-# Run basic tests
-node test-basic.js
+# Run tests
+npm run test
 
-# Run comprehensive test suite
-node test-suite.js
-```
-
-## Project Structure
-
-```
-flexible-xml-parser/
-├── XMLParser.js              # Main entry point
-├── Xml2JsParser.js           # Core parsing engine
-├── OptionsBuilder.js         # Options management
-├── validator.js              # XML validation
-├── DocTypeReader.js          # DOCTYPE parsing
-├── OutputBuilders/           # Output format builders
-│   ├── BaseOutputBuilder.js
-│   ├── CompactObjBuilder.js
-│   ├── NodeTreeBuilder.js
-│   └── JsMinArrBuilder.js
-├── valueParsers/             # Value transformation
-│   ├── trim.js
-│   ├── booleanParser.js
-│   ├── number.js
-│   └── currency.js
-├── inputSource/              # Input handling
-│   ├── StringSource.js
-│   └── BufferSource.js
-├── util.js                   # Utility functions
-├── index.js                  # Package exports
-└── index.d.ts                # TypeScript definitions
+# Performance tests
+node bench/bench.mjs
 ```
 
 ## Making Changes
-
-### Adding a New Value Parser
-
-1. Create a new file in `valueParsers/`:
-
-```javascript
-// valueParsers/dateParser.js
-export default class DateParser {
-  constructor(options) {
-    this.options = options || {};
-  }
-  
-  parse(val) {
-    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-      return new Date(val);
-    }
-    return val;
-  }
-}
-```
-
-2. Export it in `index.js`:
-
-```javascript
-export { default as dateParser } from './valueParsers/dateParser.js';
-```
-
-3. Add TypeScript definition in `index.d.ts`:
-
-```typescript
-export class dateParser implements ValueParser {
-  constructor(options?: any);
-  parse(value: any): any;
-}
-```
-
-4. Add tests in `test-suite.js`
-
-### Adding a New Output Builder
-
-1. Create a new file in `OutputBuilders/`:
-
-```javascript
-// OutputBuilders/MyBuilder.js
-import BaseOutputBuilder from './BaseOutputBuilder.js';
-
-export default class MyOutputBuilder {
-  constructor(options) {
-    this.options = options || {};
-  }
-  
-  getInstance(parserOptions) {
-    return new MyBuilderInstance(parserOptions, this.options);
-  }
-}
-
-class MyBuilderInstance extends BaseOutputBuilder {
-  constructor(parserOptions, builderOptions) {
-    super();
-    this.options = { ...builderOptions, ...parserOptions };
-    // Initialize your data structure
-  }
-  
-  addElement(tag) {
-    // Handle opening tag
-  }
-  
-  closeElement() {
-    // Handle closing tag
-  }
-  
-  addValue(text) {
-    // Handle text content
-  }
-  
-  getOutput() {
-    // Return final output
-    return this.result;
-  }
-}
-
-export { MyBuilderInstance };
-```
-
-2. Export in `index.js`
-
-3. Add TypeScript definitions
-
-4. Add documentation and examples
 
 ### Adding New Options
 
 1. Add to `defaultOptions` in `OptionsBuilder.js`
 2. Handle in `syncBackwardCompatibility()` if it's a top-level option
 3. Update TypeScript definitions in `index.d.ts`
-4. Document in DOCUMENTATION.md
+4. Document in docs/options.md for new options and in relevant file in docs folder.
 
-## Testing
-
-### Running Tests
-
-```bash
-# Basic functionality tests
-node test-basic.js
-
-# Comprehensive test suite
-node test-suite.js
-
-# Individual test
-node -e "
-import XMLParser from './XMLParser.js';
-const parser = new XMLParser();
-const result = parser.parse('<root><tag>value</tag></root>');
-console.log(result);
-"
-```
 
 ### Writing Tests
 
-Add tests to `test-suite.js`:
+Add tests following jasmine syntax. Use testRunner methods to run test for all supported input sources.
 
 ```javascript
-addTest('Your test name', async () => {
-  const { default: XMLParser } = await import('./XMLParser.js');
-  
-  const xmlData = `<root>...</root>`;
-  const expected = { ... };
-  
-  const parser = new XMLParser({ /* options */ });
-  const result = parser.parse(xmlData);
-  
-  assertEqual(result, expected, 'Test description');
-});
+runAcrossAllInputSources(
+  "should handle multiple attributes on root tag",
+  `<root version="1.0" lang="en"><child/></root>`,
+  (result) => {
+    expect(result.root["@_version"]).toBe(1);
+    expect(result.root["@_lang"]).toBe("en");
+  },
+  { skip: { attributes: false } }
+);
 ```
 
 ### Test Coverage
@@ -235,6 +98,8 @@ Ensure your changes are covered by tests:
    - Update documentation if needed
 
 ## Coding Standards
+
+Understand the responsibility of each method, and class. Try to DRY (Do not Repeat Yourself)
 
 ### JavaScript Style
 
@@ -290,10 +155,10 @@ throw new Error('Invalid tag');
 ### Documentation
 
 - Update README.md for user-facing changes
-- Update DOCUMENTATION.md for detailed documentation
+- Update detail documentation in docs folder in relevant file.
 - Add JSDoc comments for all public APIs
 - Include examples for new features
-- Update CHANGELOG.md
+- Don't update CHANGELOG.md. This would be updated at the time of release.
 
 ## Pull Request Checklist
 
@@ -303,11 +168,11 @@ Before submitting a PR, ensure:
 - [ ] All tests pass (`node test-suite.js`)
 - [ ] New features have tests
 - [ ] Documentation is updated
-- [ ] CHANGELOG.md is updated
 - [ ] TypeScript definitions are updated
 - [ ] No console.log or debugging code
 - [ ] Commit messages follow conventions
 - [ ] Branch is up to date with main
+- [ ] No change in generated files like browser bundle or `package-lock.json` etc.
 
 ## Questions?
 
