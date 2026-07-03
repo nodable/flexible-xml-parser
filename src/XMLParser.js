@@ -183,19 +183,15 @@ export default class XMLParser {
       this._initFeedSession();
     }
 
-    let str;
-    if (typeof data === 'string') {
-      str = data;
-    } else if (Buffer.isBuffer(data)) {
-      str = data.toString();
-    } else if (data?.toString) {
-      str = data.toString();
-    } else {
-      throw new ParseError('feed() data must be a string or Buffer.', ErrorCode.DATA_MUST_BE_STRING);
-    }
-
-    this._feedSource.feed(str);
-    this._pendingBytes += str.length;
+    // Pass raw data straight through — do NOT pre-convert Buffers to string
+    // here. FeedableSource.feed() decodes Buffers via a persistent
+    // StringDecoder so a multi-byte UTF-8 character split across two feed()
+    // calls decodes correctly; converting each chunk with .toString() first
+    // (as this used to do) decodes each chunk in isolation and corrupts a
+    // split character. feed() itself validates the type and throws
+    // DATA_MUST_BE_STRING for anything unsupported.
+    const appendedLength = this._feedSource.feed(data);
+    this._pendingBytes += appendedLength;
 
     if (this._pendingBytes >= this._batchThreshold) {
       this._runParse();

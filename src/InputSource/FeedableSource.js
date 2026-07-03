@@ -1,4 +1,5 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
+import { StringDecoder } from 'node:string_decoder';
 
 /**
  * FeedableSource — input source for the feed()/end() API.
@@ -78,6 +79,19 @@ export default class FeedableSource {
      * the next feed() double-counts every '\n' it consumed before failing.
      */
     this._marks = [null, null];
+
+    /**
+     * Lazily-created, persistent across the whole feed() session. Buffer
+     * chunks must go through this rather than Buffer#toString() per chunk —
+     * toString() decodes each chunk in isolation, so a multi-byte UTF-8
+     * character whose bytes straddle a chunk boundary gets corrupted (each
+     * half independently replaced with U+FFFD). StringDecoder holds back an
+     * incomplete trailing sequence internally and prepends it to the next
+     * write(), so a split character decodes correctly once the rest of its
+     * bytes arrive. Only created if Buffer input is ever fed — string-only
+     * callers never pay for it.
+     */
+    this._decoder = null;
   }
 
   /**
@@ -89,9 +103,28 @@ export default class FeedableSource {
    * the limit.
    *
    * @param {string|Buffer} data
+   * @returns {number} number of characters appended to the buffer (after
+   *   decoding) — callers that track fed-byte totals (e.g. XMLParser.feed's
+   *   batch threshold) should use this rather than the raw input length,
+   *   since a Buffer chunk ending mid-character may decode to fewer chars
+   *   than its byte length until the next chunk completes the sequence.
    */
   feed(data) {
-    const newData = typeof data === 'string' ? data : data.toString();
+    let newData;
+    if (typeof data === 'string') {
+      newData = data;
+    } else if (Buffer.isBuffer(data)) {
+      // Stateful decode: bytes of a multi-byte char split across two feed()
+      // calls are buffered internally by StringDecoder and correctly
+      // stitched together, instead of each chunk being decoded in isolation.
+      if (!this._decoder) this._decoder = new StringDecoder('utf8');
+      newData = this._decoder.write(data);
+    } else if (data?.toString) {
+      newData = data.toString();
+    } else {
+      throw new ParseError('feed() data must be a string or Buffer.', ErrorCode.DATA_MUST_BE_STRING);
+    }
+
     const liveBytes = this.buffer.length - this.startIndex;
 
     if (liveBytes + newData.length > this.maxBufferSize) {
@@ -103,10 +136,20 @@ export default class FeedableSource {
     }
 
     this.buffer += newData;
+    return newData.length;
   }
 
   /** Signal that no more data will be fed. */
   end() {
+    if (this._decoder) {
+      // Flush any final incomplete byte sequence held by the decoder. For
+      // well-formed UTF-8 input this is normally '' (nothing pending); a
+      // non-empty result here means the input was genuinely truncated
+      // mid-character, and StringDecoder's own U+FFFD substitution is the
+      // correct, standard behavior for that case.
+      const tail = this._decoder.end();
+      if (tail) this.buffer += tail;
+    }
     this.isComplete = true;
   }
 

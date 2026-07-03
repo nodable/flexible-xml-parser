@@ -28,7 +28,11 @@ export default class StreamSource extends FeedableSource {
   attachStream(readable, onChunk, onEnd, onError) {
     readable.on('data', chunk => {
       try {
-        this.feed(typeof chunk === 'string' ? chunk : chunk.toString());
+        // Pass the raw chunk (Buffer or string) straight through — feed()
+        // decodes Buffers via a persistent StringDecoder so a multi-byte
+        // UTF-8 character split across two chunks decodes correctly instead
+        // of each half being independently mangled by a per-chunk toString().
+        this.feed(chunk);
         onChunk(null); // chunk appended successfully — caller runs parseXml()
       } catch (err) {
         onChunk(err); // buffer overflow or coercion failure
