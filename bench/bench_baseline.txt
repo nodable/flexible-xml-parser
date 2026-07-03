@@ -1,0 +1,3 @@
+doc size (chars): 5935951
+parse(): 15 iterations, total 7182.6ms, avg 478.84ms/parse
+feed()/end() 4KB chunks: 10 iterations, chunk=4096, total 35955.6ms, avg 3595.56ms/parse
