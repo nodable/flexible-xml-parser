@@ -1,4 +1,13 @@
 
+**1.7.0 (2026-07-03)**
+- perf: upgrade to xml-naming v0.3.0 to support caching
+- perf: parse attributes only once
+- perf: quote aware scan: `scanTagExpEnd` to all input sources
+- perf: call tag reading methods frequency wise
+- perf: autoflush
+- fix(#5): StreamSource and FeedableSource don't respect multi-byte characters
+
+
 **1.6.1 (2026-06-30)**
 - Pass xml declaration attributes to output builder irrespection of parser options.
 
