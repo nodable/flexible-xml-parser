@@ -63,6 +63,7 @@
     "@types/node": "^20.19.37",
     "babel-loader": "^10.1.1",
     "c8": "^11.0.0",
+    "codebase-map": "^0.6.1",
     "jasmine": "^6.1.0",
     "typescript": "^6.0.2",
     "webpack": "^5.105.4",

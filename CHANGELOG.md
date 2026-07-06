@@ -1,4 +1,10 @@
 
+**1.8.0 (2026-07-06)**
+- feat: Support multiple encodings
+- fix: reading bug for a rare case for String source
+- feat: make santization optional for output builders, who don't want to produce JSON.
+- perf: cache tag/attr name validation.
+
 **1.7.0 (2026-07-03)**
 - perf: upgrade to xml-naming v0.3.0 to support caching
 - perf: parse attributes only once
