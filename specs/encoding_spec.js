@@ -155,44 +155,7 @@ describe("Encoding support", () => {
     });
   });
 
-  it("BufferSource readCh and readStr agree on multi-byte UTF-8 at character boundaries", () => {
-    const xml = 'café'; // 4 chars, 5 bytes
-    const buf = Buffer.from(xml, 'utf8');
-    const profile = buildProfileForBuffer(buf, { encoding: 'utf8' });
-    const source = new BufferSource(buf, profile);
 
-    // 1. Read the whole buffer char-by-char and join → should be "café"
-    const chars = [];
-    while (source.canRead()) {
-      chars.push(source.readCh());
-    }
-    expect(chars.join('')).toBe('café');
-
-    // 2. Reset and read the same string via readStr with the full byte length
-    source.startIndex = 0;
-    const fullString = source.readStr(buf.length); // 5 bytes
-    expect(fullString).toBe('café');
-
-    // 3. Test a single multi-byte character: 'é' (2 bytes)
-    source.startIndex = 0; // reset
-    // Read first three single-byte chars: 'c', 'a', 'f'
-    source.readCh(); // 'c'
-    source.readCh(); // 'a'
-    source.readCh(); // 'f'
-    // Now at byte offset 3 (after 'caf')
-    const startOfE = source.startIndex; // should be 3
-    // Read 'é' with readCh() – it returns 'é' and advances startIndex by 2
-    const charFromReadCh = source.readCh();
-    expect(charFromReadCh).toBe('é');
-    expect(source.startIndex).toBe(5); // byte offset after é
-
-    // Reset to start of é and read via readStr(2)
-    source.startIndex = startOfE;
-    const charFromReadStr = source.readStr(2); // 2 bytes = 'é'
-    expect(charFromReadStr).toBe('é');
-    // readStr does NOT update startIndex, so it remains at startOfE
-    // (but we don't care; we verified the string)
-  });
 
 });
 

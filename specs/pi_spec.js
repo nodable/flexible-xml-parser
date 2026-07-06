@@ -234,4 +234,14 @@ describe("Processing Instructions — malformed PI", function () {
     /Unexpected closing of source/
   );
 
+  // Regression for the "enough left to read?" fix: a large amount of prior
+  // content used to make the closing-tag scan keep going well past the real
+  // end of the document before giving up. Confirms the same, correct error
+  // still comes back once real content precedes the unclosed PI tag.
+  runAcrossAllInputSourcesWithException(
+    "should throw when PI tag is not closed, deep inside a long document",
+    `<root>${"x".repeat(5000)}</root><?pi  `,
+    /Unexpected closing of source/
+  );
+
 });

@@ -180,9 +180,9 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       }
     },
 
-    canRead(n) {
-      n = (n !== undefined) ? n : this.startIndex;
-      return this.buffer.length - n > 0;
+    // Relative to current position, matching FeedableSource's formula.
+    canRead(n = 0) {
+      return this.startIndex + n < this.buffer.length;
     },
   };
 }

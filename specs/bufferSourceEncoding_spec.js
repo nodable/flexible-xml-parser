@@ -1,6 +1,7 @@
 import { buildProfileForBuffer } from "../src/Encoding/EncodingProfile.js";
 import BufferSource from "../src/InputSource/BufferSource.js";
 import FeedableSource from "../src/InputSource/FeedableSource.js";
+import StringSource from "../src/InputSource/StringSource.js";
 
 describe("BufferSource + EncodingProfile wiring", () => {
 
@@ -49,29 +50,30 @@ describe("BufferSource + EncodingProfile wiring", () => {
 
 });
 
-describe("canRead(n) formula — pre-existing, encoding-independent inconsistency", () => {
-  // BufferSource/StringSource: canRead(n) checks buffer.length - n > 0.
-  //   -> n is treated as an absolute position in the whole document.
-  // FeedableSource: canRead(n) checks startIndex + n < buffer.length.
-  //   -> n is treated as "how many more characters from here".
-  // These only agree when n is left out entirely (defaults to startIndex).
-  // Passing an explicit n gives a different, wrong answer on BufferSource
-  // once any reading has already happened.
+describe("canRead(n) formula — all sources agree, relative to current position", () => {
+  // All three sources now check startIndex + n < buffer.length -- "how many
+  // more characters from here", not "how big is the whole document".
 
-  it("BufferSource ignores how far it has already read when checking canRead(n)", () => {
+  it("BufferSource answers relative to how far it has already read", () => {
     const buf = Buffer.from('0123456789'); // 10 bytes total
     const source = new BufferSource(buf);
     source.startIndex = 8; // only 2 characters left: '8', '9'
 
-    // Asking "can I read 3 more characters from here?" should be false --
-    // only 2 remain. BufferSource answers true instead, because it checks
-    // the number against the whole buffer length, not against the current
-    // position.
-    expect(source.canRead(3)).toBe(true);  // wrong answer, documents the bug
-    expect(source.canRead()).toBe(true);   // no-argument form is fine (2 left)
+    expect(source.canRead(3)).toBe(false); // correct: only 2 remain
+    expect(source.canRead(1)).toBe(true);  // correct: 1 remains after this one
+    expect(source.canRead()).toBe(true);   // still fine (2 left)
   });
 
-  it("FeedableSource answers the same question correctly", () => {
+  it("StringSource answers relative to how far it has already read", () => {
+    const source = new StringSource('0123456789');
+    source.startIndex = 8; // only 2 characters left
+
+    expect(source.canRead(3)).toBe(false);
+    expect(source.canRead(1)).toBe(true);
+    expect(source.canRead()).toBe(true);
+  });
+
+  it("FeedableSource answers the same question the same way", () => {
     const source = new FeedableSource();
     source.feed('0123456789');
     source.startIndex = 8; // only 2 characters left

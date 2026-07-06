@@ -290,8 +290,13 @@ export default class StringSource {
     }
   }
 
-  canRead(n) {
-    n = (n !== undefined) ? n : this.startIndex;
-    return this.buffer.length - n > 0;
+  /**
+   * Returns true when there is at least one character available at or after
+   * the given offset (relative to startIndex). Mirrors FeedableSource's
+   * formula so all three sources answer the same question the same way.
+   * @param {number} [n=0]
+   */
+  canRead(n = 0) {
+    return this.startIndex + n < this.buffer.length;
   }
 }

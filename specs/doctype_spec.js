@@ -535,3 +535,42 @@ describe("Per-parse isolation", function () {
 
 
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. Truncated sub-tag keyword deep inside a long document — regression for
+// the "enough left to read?" fix. Before the fix, a long enough document made
+// the check answer "yes" even when only a couple of characters actually
+// remained, so a truncated keyword produced a misleading "Invalid ..." error
+// instead of the correct "Unexpected end of source" one.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("DOCTYPE — truncated sub-tag keyword deep inside a long document", function () {
+
+  // Padding pushes total document length well past the small numbers checked
+  // by the sub-tag keyword guards, so the old bug (checking against total
+  // document length instead of current position) would have hidden the
+  // truncation.
+  const padding = "x".repeat(200);
+  const paddedEntity = `<!ENTITY pad "${padding}">`;
+
+  runAcrossAllInputSourcesWithException(
+    "truncated ATTLIST keyword reports unexpected end, not invalid tag",
+    `<!DOCTYPE root [${paddedEntity}<!ATT`,
+    "Unexpected end of source reading DOCTYPE ATTLIST keyword",
+    { doctypeOptions: { enabled: true } }
+  );
+
+  runAcrossAllInputSourcesWithException(
+    "truncated NOTATION keyword reports unexpected end, not invalid tag",
+    `<!DOCTYPE root [${paddedEntity}<!N`,
+    "Unexpected end of source reading DOCTYPE NOTATION keyword",
+    { doctypeOptions: { enabled: true } }
+  );
+
+  runAcrossAllInputSourcesWithException(
+    "truncated ENTITY keyword reports unexpected end, not invalid tag",
+    `<!DOCTYPE root [${paddedEntity}<!EN`,
+    "Unexpected end of source reading DOCTYPE ENTITY keyword",
+    { doctypeOptions: { enabled: true } }
+  );
+
+});
