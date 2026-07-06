@@ -267,7 +267,7 @@ path) and speed is opt-in, not assumed.
   only ever call `source.readCh()/.readChAt()/.canRead()`, never index the
   raw buffer directly, so whichever scan strategy `BufferSource` was
   constructed with already applies to them automatically. No changes were
-  needed there. (There's a separate, pre-existing, encoding-*independent*
-  bug in `canRead(n)`'s offset formula on `BufferSource`/`StringSource` —
-  see the main project map's architecture notes — that predates this feature
-  and isn't specific to non-UTF-8 input.)
+  needed there. (A separate, encoding-*independent* inconsistency in
+  `canRead(n)`'s offset formula on `BufferSource`/`StringSource` — unrelated
+  to this feature — has since been fixed; see the main project map's
+  architecture notes.)

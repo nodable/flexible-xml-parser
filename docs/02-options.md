@@ -118,6 +118,45 @@ Increase `maxBufferSize` only if a single XML token (one tag, one CDATA block) e
 
 ---
 
+## `decoding` — character encoding for byte/stream input
+
+Only relevant when input is a `Buffer`/`Uint8Array` (`parseBytesArr()`, or bytes passed to `parse()`/`feed()`/`parseStream()`). Ignored for plain string input — there's nothing to decode.
+
+```javascript
+decoding: {
+  encoding: 'auto',        // 'auto' | 'utf8' | 'ascii' | 'latin1' | 'utf16le' | 'utf16be' | a custom name
+  customDecoders: {},      // register encodings FXP doesn't ship natively
+}
+```
+
+`'auto'` (default) looks for a byte-order mark first, then a `<?xml ... encoding="..."?>` declaration, then falls back to `'utf8'`. A BOM and a declared encoding that disagree throw `ENCODING_MISMATCH` rather than silently picking one. Set `encoding` explicitly to skip detection entirely.
+
+For an encoding not built in (e.g. Shift_JIS), register it under `customDecoders`, keyed by the name you'll use in `encoding`:
+
+```javascript
+import iconv from 'iconv-lite';
+
+new XMLParser({
+  decoding: {
+    encoding: 'shift_jis',
+    customDecoders: {
+      shift_jis: {
+        createDecoder: () => iconv.getDecoder('shift_jis'), // { write(buf): string, end(): string }
+        selfSynchronizing: false, // default and safe — see below
+      },
+    },
+  },
+});
+```
+
+`selfSynchronizing` — leave `false` unless you've verified an ASCII delimiter byte (`<`, `>`, `"`, `'`) can never appear as part of one of this encoding's multi-byte characters. Setting it `true` incorrectly causes wrong tag/attribute boundaries to be found, not a crash — this is a correctness switch, not a performance knob to flip speculatively. A malformed `createDecoder()` (missing `write`/`end`) throws immediately at registration, not later during parsing.
+
+`customDecoders` is scoped to the one `XMLParser` instance it's passed to — it doesn't leak into other instances in the same process.
+
+See [16-encoding.md](./16-encoding.md) for the full internals (why `BufferSource` needs this in particular, how streaming auto-detection buffers bytes until it knows the encoding, and how error line/column stay accurate for multi-byte characters).
+
+---
+
 ## `autoClose` — lenient HTML parsing
 
 ```javascript
