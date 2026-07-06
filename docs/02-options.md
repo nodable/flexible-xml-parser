@@ -187,12 +187,17 @@ exitIf: (tagDetail, matcher) => {
 
 ---
 
-## `strictReservedNames` / `onDangerousProperty`
+## `strictReservedNames` / `onDangerousProperty` / `sanitizeNames`
 
 ```javascript
 strictReservedNames:  false,             // throw on reserved JS property names
-onDangerousProperty:  defaultHandler,    // callback when a dangerous property name is seen
+onDangerousProperty:  defaultHandler,    // callback when a dangerous name is seen
+sanitizeNames:        true,              // set false to skip the dangerous-name rename step
 ```
+
+`sanitizeNames: false` skips only the dangerous-property rename step — names like `hasOwnProperty`, `toString`, or `valueOf` pass through unprefixed and `onDangerousProperty` is never called for them. It does **not** disable the check for `__proto__`, `constructor`, or `prototype` — those always throw, because that check guards against an actual prototype-pollution vulnerability in the output object, not a naming preference, and isn't something a config flag should be able to turn off. It also does not affect `strictReservedNames`, a separate check for name collisions with your own `nameFor.*`/`attributes.groupBy` settings.
+
+This is meant for trusted input only — internal XML-to-XML pipelines, or documents you generate yourself — where you already know the names in the dangerous-but-not-critical list can't cause problems.
 
 See [08-security.md](./08-security.md).
 

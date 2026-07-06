@@ -34,6 +34,14 @@ export default class XMLParser {
       this.options.decoding = this.options.decoding || {};
       this.options.decoding._registry = defaultEncodingRegistry;
     }
+
+    // Shared tag/attribute name cache — lives on `options`, not on any one
+    // Xml2JsParser instance, because `.parse()` creates a fresh Xml2JsParser
+    // every call while `this.options` is passed by reference to all of them.
+    // This lets repeated names skip re-validation/re-sanitization across
+    // separate parse() calls on the same XMLParser instance, not just within
+    // one document. See Xml2JsParser.js for what's cached and why.
+    this.options._nameCache = { tags: new Map(), attrs: new Map() };
   }
 
   // ─── One-shot parse methods ───────────────────────────────────────────────

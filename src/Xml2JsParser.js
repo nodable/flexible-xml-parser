@@ -12,6 +12,38 @@ import AutoCloseHandler from './AutoCloseHandler.js';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { createValidator } from 'xml-naming';
 
+// Cap on the tag-name and attribute-name caches (each capped independently —
+// see SAVEPOINT_name_cache.md for why: real documents have a small closed
+// vocabulary of names, so this is a not-unbounded-growth guard for a
+// pathological one-off document, not a security control (that's what
+// limits.maxAttributesPerTag/maxNestedTags are for). Not user-configurable —
+// an internal implementation detail, not a knob most users could tune
+// meaningfully. On overflow the whole map is cleared rather than evicting
+// individual entries (LRU) — simpler, and this ceiling is rare in practice.
+const NAME_CACHE_LIMIT = 2000;
+
+/**
+ * Returns the cached result of computeFn(rawName) if present, otherwise
+ * calls computeFn(), caches the result, and returns it.
+ *
+ * If computeFn() throws (invalid name, restricted name, prototype-pollution
+ * attempt, etc.) nothing is cached — the next occurrence of the same bad
+ * name re-runs the full check and throws again from scratch. These are rare
+ * error paths where correctness matters, not speed.
+ *
+ * A plain Map is used (not a plain object) so a legitimately falsy cached
+ * value (resolveNsPrefix returns `false` for a dropped xmlns declaration)
+ * is never confused with "not cached" — Map.get() only returns undefined
+ * when the key is genuinely absent.
+ */
+function getCachedName(cache, rawName, computeFn) {
+  if (cache.has(rawName)) return cache.get(rawName);
+  const result = computeFn();
+  if (cache.size >= NAME_CACHE_LIMIT) cache.clear();
+  cache.set(rawName, result);
+  return result;
+}
+
 class TagDetail {
   /**
    * @param {string} name  - Tag name
@@ -61,6 +93,17 @@ export default class Xml2JsParser {
     // exitIf: optional predicate called after each opening tag is pushed.
     // Stored directly — it's a plain function, not an ExpressionSet.
     this._exitIf = typeof options.exitIf === 'function' ? options.exitIf : null;
+
+    // Tag/attribute name cache — read from `options`, not created fresh here.
+    // `XMLParser` creates a brand-new Xml2JsParser on every parse() call but
+    // passes the *same* options object each time, so a cache stored on
+    // `options` survives across those calls. Deliberately NOT reset in
+    // initializeParser() (unlike _nameValidators) — it depends only on the
+    // raw name string plus options that are fixed for this instance's
+    // lifetime, never on anything document-specific like xmlVersion.
+    // Guarded fallback here in case Xml2JsParser is ever constructed
+    // directly (e.g. in tests) without going through XMLParser.
+    this._nameCache = options._nameCache || (options._nameCache = { tags: new Map(), attrs: new Map() });
   }
 
   initializeParser() {
@@ -582,32 +625,36 @@ export default class Xml2JsParser {
     return validator;
   }
 
-  processAttrName(attrName) {
-    const options = this.options;
-    attrName = resolveNsPrefix(attrName, options.skip.nsPrefix);
-    if (!this.getNameValidator('qName')(attrName)) { //TODO: make it optional
-      throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
-    }
-    attrName = sanitizeName(attrName, options.onDangerousProperty);
-    if (options.strictReservedNames && attrName === options.attributes.groupBy) {
-      throw new ParseError(`Restricted attribute name: ${attrName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
-    }
-    return attrName;
+  processAttrName(rawAttrName) {
+    return getCachedName(this._nameCache.attrs, rawAttrName, () => {
+      const options = this.options;
+      let attrName = resolveNsPrefix(rawAttrName, options.skip.nsPrefix);
+      if (!this.getNameValidator('qName')(attrName)) { //TODO: make it optional
+        throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
+      }
+      attrName = sanitizeName(attrName, options.onDangerousProperty, options.sanitizeNames);
+      if (options.strictReservedNames && attrName === options.attributes.groupBy) {
+        throw new ParseError(`Restricted attribute name: ${attrName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
+      }
+      return attrName;
+    });
   }
 
-  processTagName(tagName) {
-    const options = this.options;
-    const nameFor = options.nameFor;
-    tagName = resolveNsPrefix(tagName, options.skip.nsPrefix);
-    tagName = sanitizeName(tagName, options.onDangerousProperty);
-    if (options.strictReservedNames && (
-      tagName === nameFor.comment ||
-      tagName === nameFor.cdata ||
-      tagName === nameFor.text
-    )) {
-      throw new ParseError(`Restricted tag name: ${tagName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
-    }
-    return tagName;
+  processTagName(rawTagName) {
+    return getCachedName(this._nameCache.tags, rawTagName, () => {
+      const options = this.options;
+      const nameFor = options.nameFor;
+      let tagName = resolveNsPrefix(rawTagName, options.skip.nsPrefix);
+      tagName = sanitizeName(tagName, options.onDangerousProperty, options.sanitizeNames);
+      if (options.strictReservedNames && (
+        tagName === nameFor.comment ||
+        tagName === nameFor.cdata ||
+        tagName === nameFor.text
+      )) {
+        throw new ParseError(`Restricted tag name: ${tagName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
+      }
+      return tagName;
+    });
   }
 
   isUnpaired(tagName) {
@@ -671,10 +718,17 @@ function resolveNsPrefix(name, skipNsPrefix) {
   return name;
 }
 
-function sanitizeName(name, onDangerousProperty) {
+function sanitizeName(name, onDangerousProperty, sanitizeNames) {
+  // criticalProperties (__proto__, constructor, prototype) guard against an
+  // actual prototype-pollution vulnerability in the output object, not just
+  // a naming collision — this check always runs, `sanitizeNames` cannot
+  // turn it off. Only the DANGEROUS_PROPERTY_NAMES rename step (a milder,
+  // cosmetic shadowing concern) is skippable for trusted input.
   if (criticalProperties.includes(name)) {
     throw new ParseError(`[SECURITY] Invalid name: "${name}" is a reserved JavaScript keyword that could cause prototype pollution`, ErrorCode.SECURITY_PROTOTYPE_POLLUTION);
-  } else if (DANGEROUS_PROPERTY_NAMES.includes(name)) {
+  }
+  if (sanitizeNames === false) return name;
+  if (DANGEROUS_PROPERTY_NAMES.includes(name)) {
     return onDangerousProperty(name);
   }
   return name;

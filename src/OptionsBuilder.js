@@ -49,6 +49,15 @@ export const defaultOptions = {
   // --- security ---
   strictReservedNames: false,
   onDangerousProperty: defaultOnDangerousProperty,
+  // sanitizeNames: false skips the dangerous-property rename step only
+  // (hasOwnProperty, toString, valueOf, ... pass through unprefixed,
+  // onDangerousProperty is never called for them). It does NOT disable the
+  // critical-property check (__proto__, constructor, prototype) — that
+  // guards against actual prototype pollution and always runs. Only for
+  // trusted input — internal XML-to-XML pipelines, generated documents —
+  // where the source is known not to contain hostile names. Does NOT affect
+  // strictReservedNames, which is a separate, independent check.
+  sanitizeNames: true,
 
   // --- filtering (path-expression-matcher) ---
   only: [], // for future

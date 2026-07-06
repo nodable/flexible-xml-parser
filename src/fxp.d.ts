@@ -482,6 +482,13 @@ export interface X2jOptions {
   strictReservedNames?: boolean;
   /** Custom handler for dangerous (non-critical) property names. Default: prefix with '__' */
   onDangerousProperty?: (name: string) => string;
+  /**
+   * Skip the dangerous-property rename step (hasOwnProperty, toString, ...)
+   * for trusted input. Does NOT disable the critical-property check
+   * (__proto__, constructor, prototype), which always runs. Does not affect
+   * strictReservedNames. Default: true
+   */
+  sanitizeNames?: boolean;
 
   // --- filtering (path-expression-matcher) ---
   select?: string[];

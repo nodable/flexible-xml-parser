@@ -157,6 +157,88 @@ describe("Security - Prototype Pollution Prevention", function () {
     }).toThrowError(/Restricted attribute name: meta/);
   });
 
+  // ─── sanitizeNames: false ────────────────────────────────────────────────
+  // Fully disables the dangerous-name/prototype-pollution check for trusted
+  // input. Must not touch strictReservedNames, a separate concern.
+
+  it("should let a dangerous tag name through unprefixed when sanitizeNames is false", function () {
+    const parser = new XMLParser({ sanitizeNames: false });
+    const result = parser.parse("<hasOwnProperty>value</hasOwnProperty>");
+    expect(Object.prototype.hasOwnProperty.call(result, "hasOwnProperty")).toBe(true);
+    expect(result["hasOwnProperty"]).toBe("value");
+  });
+
+  it("should let a dangerous attribute name through unprefixed when sanitizeNames is false", function () {
+    const parser = new XMLParser({
+      sanitizeNames: false,
+      attributes: { prefix: "" },
+      skip: { attributes: false },
+    });
+    const result = parser.parse(`<root hasOwnProperty="value"></root>`);
+    expect(result.root["hasOwnProperty"]).toBe("value");
+  });
+
+  it("should still throw on a critical name even when sanitizeNames is false (not skippable)", function () {
+    const parser = new XMLParser({ sanitizeNames: false });
+    expect(() => parser.parse("<__proto__>value</__proto__>")).toThrowError(
+      /is a reserved JavaScript keyword that could cause prototype pollution/
+    );
+  });
+
+  it("should still enforce strictReservedNames when sanitizeNames is false", function () {
+    const parser = new XMLParser({
+      sanitizeNames: false,
+      strictReservedNames: true,
+      nameFor: { text: "abc" },
+    });
+    expect(() => parser.parse("<abc>normal</abc>")).toThrowError(/Restricted tag name: abc/);
+  });
+
+  // ─── name cache correctness ──────────────────────────────────────────────
+  // A cache must never change *what* is thrown/returned — only skip repeat
+  // work. These guard against "only sanitized/validated on first sight".
+
+  it("should sanitize a dangerous tag name identically on every repeated occurrence", function () {
+    const parser = new XMLParser();
+    const result = parser.parse(
+      "<root><toString>a</toString><toString>b</toString><toString>c</toString></root>"
+    );
+    expect(result.root.__toString).toEqual(["a", "b", "c"]);
+  });
+
+  it("should keep throwing on a critical tag name across repeated parse() calls, not just the first", function () {
+    const parser = new XMLParser();
+    expect(() => parser.parse("<constructor>x</constructor>")).toThrowError(/prototype pollution/);
+    expect(() => parser.parse("<constructor>y</constructor>")).toThrowError(/prototype pollution/);
+    expect(() => parser.parse("<constructor>z</constructor>")).toThrowError(/prototype pollution/);
+  });
+
+  it("should keep throwing on a strictReservedNames collision across repeated parse() calls", function () {
+    const parser = new XMLParser({ strictReservedNames: true, nameFor: { text: "abc" } });
+    expect(() => parser.parse("<abc>1</abc>")).toThrowError(/Restricted tag name: abc/);
+    expect(() => parser.parse("<abc>2</abc>")).toThrowError(/Restricted tag name: abc/);
+  });
+
+  it("should reuse the same name cache across repeated parse() calls on one XMLParser instance", function () {
+    // Not observable behavior per se, but pins down the documented design:
+    // options._nameCache is created once and shared by every Xml2JsParser
+    // this XMLParser instance spawns.
+    const parser = new XMLParser();
+    parser.parse("<root><a>1</a></root>");
+    const cacheAfterFirst = parser.options._nameCache;
+    expect(cacheAfterFirst).toBeDefined();
+    parser.parse("<root><a>2</a></root>");
+    expect(parser.options._nameCache).toBe(cacheAfterFirst);
+    expect(cacheAfterFirst.tags.has("root")).toBe(true);
+    expect(cacheAfterFirst.tags.has("a")).toBe(true);
+  });
+
+  it("should give two separate XMLParser instances two separate name caches", function () {
+    const parserA = new XMLParser();
+    const parserB = new XMLParser();
+    expect(parserA.options._nameCache).not.toBe(parserB.options._nameCache);
+  });
+
 });
 
 
