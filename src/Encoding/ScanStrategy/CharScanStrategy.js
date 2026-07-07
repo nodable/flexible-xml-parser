@@ -33,17 +33,40 @@ export function createCharScanStrategy() {
       return this.buffer.substring(from, from + n);
     },
 
+    /** See StringSource.js for the full doc — identical contract, same
+     * plain-string buffer shape. */
+    matchAhead(expected, caseInsensitive = false) {
+      const len = expected.length;
+      for (let i = 0; i < len; i++) {
+        let ch = this.buffer[this.startIndex + i];
+        if (ch === undefined) return null;
+        if (caseInsensitive) ch = ch.toLowerCase();
+        if (ch !== expected[i]) return false;
+      }
+      return true;
+    },
+
     scanTagExpEnd() {
       const buf = this.buffer;
       const len = buf.length;
       const start = this.startIndex;
       let inSingle = false;
       let inDouble = false;
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
       for (let i = start; i < len; i++) {
         const c = buf[i];
         if (c === "'") { if (!inDouble) inSingle = !inSingle; }
         else if (c === '"') { if (!inSingle) inDouble = !inDouble; }
-        else if (c === '>' && !inSingle && !inDouble) return i - start;
+        else if (c === '>' && !inSingle && !inDouble) {
+          // Same fix as StringSource.js — avoid re-walking this span a
+          // second time in updateBufferBoundary() just to count newlines.
+          this._pendingScanEnd = i;
+          this._pendingScanNewlineCount = newlineCount;
+          this._pendingScanLastNewlineIdx = lastNewlineIdx;
+          return i - start;
+        }
+        else if (c === '\n') { newlineCount++; lastNewlineIdx = i; }
       }
       return -1;
     },
@@ -60,15 +83,20 @@ export function createCharScanStrategy() {
     readUpto(stopStr) {
       const inputLength = this.buffer.length;
       const stopLength = stopStr.length;
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
       for (let i = this.startIndex; i < inputLength; i++) {
+        if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
         let match = true;
         for (let j = 0; j < stopLength; j++) {
           if (this.buffer[i + j] !== stopStr[j]) { match = false; break; }
         }
         if (match) {
           const result = this.buffer.substring(this.startIndex, i);
-          this._advanceLineCol(i + stopLength);
-          this.startIndex = i + stopLength;
+          const end = i + stopLength;
+          if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+          else this.cols += end - this.startIndex;
+          this.startIndex = end;
           return result;
         }
       }
@@ -91,7 +119,10 @@ export function createCharScanStrategy() {
       const stopLength = stopStr.length;
       let tagMatchStart = -1;
       let state = 0;
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
       for (let i = this.startIndex; i < inputLength; i++) {
+        if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
         if (state === 1) {
           const c = this.buffer[i];
           if (c === ' ' || c === '\t') continue;
@@ -106,8 +137,10 @@ export function createCharScanStrategy() {
         }
         if (state === 2) {
           const result = this.buffer.substring(this.startIndex, tagMatchStart);
-          this._advanceLineCol(i + 1);
-          this.startIndex = i + 1;
+          const end = i + 1;
+          if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+          else this.cols += end - this.startIndex;
+          this.startIndex = end;
           return result;
         }
       }
@@ -124,8 +157,20 @@ export function createCharScanStrategy() {
 
     updateBufferBoundary(n = 1) {
       const end = this.startIndex + n;
-      this._advanceLineCol(end);
-      this.startIndex = end;
+      const pendingEnd = this._pendingScanEnd;
+      this._pendingScanEnd = -1;
+      if (pendingEnd !== -1 && end === pendingEnd + 1) {
+        if (this._pendingScanNewlineCount > 0) {
+          this.line += this._pendingScanNewlineCount;
+          this.cols = end - this._pendingScanLastNewlineIdx - 1;
+        } else {
+          this.cols += end - this.startIndex;
+        }
+        this.startIndex = end;
+      } else {
+        this._advanceLineCol(end);
+        this.startIndex = end;
+      }
       if (this.autoFlush && this.startIndex >= this.flushThreshold && this._tokenStart < 0) {
         this.flush();
       }

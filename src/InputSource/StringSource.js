@@ -43,6 +43,16 @@ export default class StringSource {
     // _marks[0] = outer mark (parseXml loop), _marks[1] = inner mark (readers).
     // -1 means "not set" for that level.
     this._marks = [-1, -1];
+
+    // Handoff from scanTagExpEnd() to updateBufferBoundary() so the latter
+    // doesn't have to re-walk a span already scanned once (see both methods
+    // below). Plain fields, not an object — this handoff happens on every
+    // single tag, so a fresh object per tag would trade one small scan for
+    // one small allocation, a wash at best on ordinary short tags and a net
+    // loss under GC pressure on a big real document. -1 = nothing pending.
+    this._pendingScanEnd = -1;
+    this._pendingScanNewlineCount = 0;
+    this._pendingScanLastNewlineIdx = -1;
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────
@@ -128,6 +138,36 @@ export default class StringSource {
   }
 
   /**
+   * Check whether the upcoming characters equal `expected`, without
+   * consuming or allocating anything — no substring is built even for a
+   * full match. Contrast with the `readStr(n).toUpperCase() === "X"` style,
+   * which allocates two throwaway strings on every call, matching or not.
+   *
+   * Caller decides what to do with a match — this never consumes. Follow a
+   * `true` result with `updateBufferBoundary(expected.length)` (or more, if
+   * something like trailing whitespace should also be consumed).
+   *
+   * @param {string} expected - literal to match against, already in the
+   *   case matchAhead should compare against when caseInsensitive is true
+   *   (e.g. pass "system", not "SYSTEM", together with caseInsensitive=true)
+   * @param {boolean} [caseInsensitive=false]
+   * @returns {boolean|null} true on full match, false on a definite
+   *   mismatch, null if the buffer runs out before enough characters are
+   *   available to decide either way (treat like any other
+   *   not-enough-data-yet case — same handling as scanTagExpEnd's -1)
+   */
+  matchAhead(expected, caseInsensitive = false) {
+    const len = expected.length;
+    for (let i = 0; i < len; i++) {
+      let ch = this.buffer[this.startIndex + i];
+      if (ch === undefined) return null;
+      if (caseInsensitive) ch = ch.toLowerCase();
+      if (ch !== expected[i]) return false;
+    }
+    return true;
+  }
+
+  /**
    * Quote-aware scan, from the current read position, for the unquoted '>'
    * that ends a tag expression (`<tag attr="...">`). Used by readTagExp().
    * Direct-buffer, bracket-indexed (not charCodeAt — see FeedableSource's
@@ -143,6 +183,8 @@ export default class StringSource {
     const start = this.startIndex;
     let inSingle = false;
     let inDouble = false;
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
@@ -150,7 +192,19 @@ export default class StringSource {
       } else if (c === '"') {
         if (!inSingle) inDouble = !inDouble;
       } else if (c === '>' && !inSingle && !inDouble) {
+        // This walk already visited every char in [start, i] — hand the
+        // newline bookkeeping to updateBufferBoundary() so it doesn't have
+        // to re-walk the same span a second time (see
+        // SAVEPOINT_closing_tag_and_double_scan.md). Single-use: whichever
+        // call reads this next (a matching updateBufferBoundary call, or a
+        // different read entirely) consumes/clears it.
+        this._pendingScanEnd = i;
+        this._pendingScanNewlineCount = newlineCount;
+        this._pendingScanLastNewlineIdx = lastNewlineIdx;
         return i - start;
+      } else if (c === '\n') {
+        newlineCount++;
+        lastNewlineIdx = i;
       }
     }
     return -1;
@@ -186,16 +240,21 @@ export default class StringSource {
   readUpto(stopStr) {
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
+      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       let match = true;
       for (let j = 0; j < stopLength; j++) {
         if (this.buffer[i + j] !== stopStr[j]) { match = false; break; }
       }
       if (match) {
         const result = this.buffer.substring(this.startIndex, i);
-        this._advanceLineCol(i + stopLength);
-        this.startIndex = i + stopLength;
+        const end = i + stopLength;
+        if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+        else this.cols += end - this.startIndex;
+        this.startIndex = end;
         return result;
       }
     }
@@ -228,8 +287,11 @@ export default class StringSource {
     let tagMatchStart = -1;
     // 0: scanning, 1: tag-name matched (scanning for '>'), 2: full match
     let state = 0;
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
+      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       if (state === 1) {
         const c = this.buffer[i];
         if (c === ' ' || c === '\t') continue;
@@ -249,8 +311,10 @@ export default class StringSource {
       }
       if (state === 2) {
         const result = this.buffer.substring(this.startIndex, tagMatchStart);
-        this._advanceLineCol(i + 1);
-        this.startIndex = i + 1;
+        const end = i + 1;
+        if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+        else this.cols += end - this.startIndex;
+        this.startIndex = end;
         return result;
       }
     }
@@ -278,8 +342,28 @@ export default class StringSource {
    */
   updateBufferBoundary(n = 1) {
     const end = this.startIndex + n;
-    this._advanceLineCol(end);
-    this.startIndex = end;
+
+    // If the immediately-preceding scanTagExpEnd() already walked this exact
+    // span looking for '>', reuse its newline count instead of walking the
+    // whole tag+attributes text a second time — see scanTagExpEnd() above
+    // and SAVEPOINT_closing_tag_and_double_scan.md. Only valid when `end`
+    // matches what that scan actually covered (guards against any other
+    // caller shape); always cleared here so a stale stash can never leak
+    // into an unrelated call.
+    const pendingEnd = this._pendingScanEnd;
+    this._pendingScanEnd = -1;
+    if (pendingEnd !== -1 && end === pendingEnd + 1) {
+      if (this._pendingScanNewlineCount > 0) {
+        this.line += this._pendingScanNewlineCount;
+        this.cols = end - this._pendingScanLastNewlineIdx - 1;
+      } else {
+        this.cols += end - this.startIndex;
+      }
+      this.startIndex = end;
+    } else {
+      this._advanceLineCol(end);
+      this.startIndex = end;
+    }
     // See FeedableSource.updateBufferBoundary() for why there is no "any mark
     // active" gate here — flush()'s own min-origin computation already
     // protects any in-progress token; a separate gate was redundant and, since

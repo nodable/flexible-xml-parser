@@ -2,7 +2,7 @@ import StringSource from './InputSource/StringSource.js';
 import BufferSource from './InputSource/BufferSource.js';
 import { buildProfileForBuffer } from './Encoding/EncodingProfile.js';
 import { errorPositionOf } from './util.js';
-import { readTagExp, readClosingTagName, flushAttributes } from './XmlPartReader.js';
+import { readTagExp, readClosingTagName, flushAttributes, tryMatchClosingTagName } from './XmlPartReader.js';
 import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
 import { Expression, ExpressionSet, Matcher } from 'path-expression-matcher';
@@ -37,7 +37,8 @@ const NAME_CACHE_LIMIT = 2000;
  * when the key is genuinely absent.
  */
 function getCachedName(cache, rawName, computeFn) {
-  if (cache.has(rawName)) return cache.get(rawName);
+  const cached = cache.get(rawName);
+  if (cached !== undefined || cache.has(rawName)) return cached;
   const result = computeFn();
   if (cache.size >= NAME_CACHE_LIMIT) cache.clear();
   cache.set(rawName, result);
@@ -54,13 +55,18 @@ class TagDetail {
    *   tag's closing '>' (i.e. end of `<tag attr="x">`). Undefined until the
    *   opening tag expression has been fully read; set in readOpeningTag().
    *   For self-closing tags this is the offset after '/>'.
+   * @param {string} [rawName] - the tag name exactly as written (before
+   *   namespace-prefix stripping) — what a matching closing tag will
+   *   literally contain. Used by readClosingTag()'s fast path; undefined for
+   *   the synthetic root node.
    */
-  constructor(name, line = 0, col = 0, index = 0, openEnd = undefined) {
+  constructor(name, line = 0, col = 0, index = 0, openEnd = undefined, rawName = undefined) {
     this.name = name;
     this.line = line;
     this.col = col;
     this.index = index;
     this.openEnd = openEnd;
+    this.rawName = rawName;
   }
 }
 
@@ -119,6 +125,11 @@ export default class Xml2JsParser {
     // a reused Xml2JsParser instance never validates against a stale
     // xmlVersion or leaks one document's name cache into the next.
     this._nameValidators = Object.create(null);
+    // Validity (unlike sanitize/ns-resolution in this._nameCache) depends on
+    // xmlVersion, which is itself document-scoped — reset alongside
+    // _nameValidators for the same reason, not on `options` with the rest of
+    // _nameCache. See isValidQName().
+    this._validQNames = new Set();
     this.xmlDec = {
       version: 1.0,
       lang: null,
@@ -304,6 +315,39 @@ export default class Xml2JsParser {
   }
 
   readClosingTag(tagStart) {
+    // ── Fast path ────────────────────────────────────────────────────────────
+    // The overwhelming majority of closing tags match the tag already sitting
+    // on top of the stack. Try that directly, character-by-character, before
+    // reading the name into a fresh string and re-validating/re-sanitizing a
+    // name we've already validated once (see
+    // SAVEPOINT_closing_tag_and_double_scan.md). Peek-only — a mismatch or a
+    // buffer that runs out mid-check costs nothing to abandon, so any failure
+    // here falls straight through to the exact original slow path below.
+    //
+    // Skipping isUnpaired()/isStopNode() on this path is safe by construction,
+    // not just by observation: only pushTag() ever sets currentTagDetail, and
+    // pushTag() is never reached for an unpaired tag or a stop-node/skip-tag
+    // match (both close themselves inline in readOpeningTag) — so whenever
+    // currentTagDetail is a real open tag, both checks are guaranteed false.
+    const current = this.currentTagDetail;
+    if (current && !current.root && current.rawName !== undefined) {
+      const consumed = tryMatchClosingTagName(this.source, current.rawName);
+      if (consumed !== -1) {
+        this.source.updateBufferBoundary(consumed);
+        const closeMeta = {
+          name: current.name,
+          line: tagStart.line,
+          col: tagStart.col,
+          index: tagStart.index,
+          closeEnd: this.source.startIndex,
+        };
+        this.addTextNode();
+        this.popTag(closeMeta);
+        return;
+      }
+    }
+
+    // ── Slow path — unchanged ────────────────────────────────────────────────
     const tagName = this.processTagName(readClosingTagName(this.source));
     // closeMeta: position of this closing tag's '</' (tagStart, passed in from
     // parseXml's dispatch) plus the offset right after its '>' (closeEnd) —
@@ -377,6 +421,7 @@ export default class Xml2JsParser {
       tagStart.col,
       tagStart.index,
       this.source.startIndex, // openEnd: offset right after this opening tag's '>'
+      tagExp.tagName, // rawName: exactly as written, for readClosingTag()'s fast path
     );
 
     // Extract namespace prefix and local name from raw tag name (e.g. "ns:tag" → "ns", "tag").
@@ -599,6 +644,31 @@ export default class Xml2JsParser {
       }
       this.tagTextData = "";
     }
+  }
+
+  /**
+   * Cached wrapper around getNameValidator('qName') — shape-validating a tag
+   * name is a pure function of the name string alone (for a fixed xmlVersion,
+   * itself fixed for the whole document), so a name seen once and found valid
+   * never needs the regex re-run for its later occurrences. Only opening tag
+   * names go through this (see buildTagExpObj in XmlPartReader.js); closing
+   * tags are checked by exact-match against the already-validated opening
+   * name instead (readClosingTag), so they never need shape validation of
+   * their own.
+   *
+   * Only valid names are cached, matching processTagName/processAttrName's
+   * existing convention — an invalid name throws every time it's seen, never
+   * silently let through after a first failure.
+   */
+  isValidQName(name) {
+    const cache = this._validQNames;
+    if (cache.has(name)) return true;
+    const ok = this.getNameValidator('qName')(name);
+    if (ok) {
+      if (cache.size >= NAME_CACHE_LIMIT) cache.clear();
+      cache.add(name);
+    }
+    return ok;
   }
 
   /**

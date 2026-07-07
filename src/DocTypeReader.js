@@ -278,8 +278,7 @@ function readEntityExp(parser) {
 
     // SYSTEM check requires 6 chars; only peek when they are available
     if (source.canRead(5)) {
-        let peek6 = source.readStr(6);
-        if (peek6.toUpperCase() === "SYSTEM") {
+        if (source.matchAhead("system", true) === true) {
             throw new ParseError("External entities are not supported",
                 ErrorCode.INVALID_TAG,
                 { line: source.line, col: source.cols, index: source.startIndex });
@@ -444,12 +443,11 @@ function readNotationExp(parser) {
             { line: source.line, col: source.cols, index: source.startIndex });
     }
 
-    let identifierType = source.readStr(6).toUpperCase();
-    if (identifierType === "SYSTEM") {
+    if (source.matchAhead("system", true) === true) {
         source.updateBufferBoundary(6);
         skipSourceWhitespace(source);
         readIdentifierVal(source, "systemIdentifier");
-    } else if (identifierType === "PUBLIC") {
+    } else if (source.matchAhead("public", true) === true) {
         source.updateBufferBoundary(6);
         skipSourceWhitespace(source);
         readIdentifierVal(source, "publicIdentifier");
@@ -465,7 +463,7 @@ function readNotationExp(parser) {
         }
     } else {
         throw new ParseError(
-            `Expected SYSTEM or PUBLIC in NOTATION, found "${identifierType}"`,
+            `Expected SYSTEM or PUBLIC in NOTATION, found "${source.readStr(6)}"`,
             ErrorCode.INVALID_TAG,
             { line: source.line, col: source.cols, index: source.startIndex }
         );

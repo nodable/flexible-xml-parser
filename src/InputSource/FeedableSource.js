@@ -65,6 +65,12 @@ export default class FeedableSource {
     this.startIndex = 0;
     this.isComplete = false;
 
+    // See StringSource.js's copy of this comment — same handoff, same
+    // reason for using plain fields instead of a per-call object.
+    this._pendingScanEnd = -1;
+    this._pendingScanNewlineCount = 0;
+    this._pendingScanLastNewlineIdx = -1;
+
     this.maxBufferSize = options.maxBufferSize || 10 * 1024 * 1024; // 10 MB
     this.autoFlush = options.autoFlush !== false;            // true by default
     this.flushThreshold = options.flushThreshold || 1024;             // 1 KB
@@ -332,6 +338,24 @@ export default class FeedableSource {
   }
 
   /**
+   * See StringSource.js's copy of this method for the full doc — identical
+   * contract here. `null` (not enough buffered data yet) is the routine
+   * case for this source in particular, since a chunk boundary can land
+   * mid-check; callers already have to handle that the same way they
+   * handle scanTagExpEnd's -1.
+   */
+  matchAhead(expected, caseInsensitive = false) {
+    const len = expected.length;
+    for (let i = 0; i < len; i++) {
+      let ch = this.buffer[this.startIndex + i];
+      if (ch === undefined) return null;
+      if (caseInsensitive) ch = ch.toLowerCase();
+      if (ch !== expected[i]) return false;
+    }
+    return true;
+  }
+
+  /**
    * Quote-aware scan, from the current read position, for the unquoted '>'
    * that ends a tag expression. Used by readTagExp() — replaces the old
    * per-char canRead(i)/readChAt(i) loop, which profiling showed as the
@@ -355,6 +379,8 @@ export default class FeedableSource {
     const start = this.startIndex;
     let inSingle = false;
     let inDouble = false;
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
@@ -362,7 +388,15 @@ export default class FeedableSource {
       } else if (c === '"') {
         if (!inSingle) inDouble = !inDouble;
       } else if (c === '>' && !inSingle && !inDouble) {
+        // See StringSource.js's copy of this method for why — same fix,
+        // same reason, kept consistent across all input sources.
+        this._pendingScanEnd = i;
+        this._pendingScanNewlineCount = newlineCount;
+        this._pendingScanLastNewlineIdx = lastNewlineIdx;
         return i - start;
+      } else if (c === '\n') {
+        newlineCount++;
+        lastNewlineIdx = i;
       }
     }
     return -1;
@@ -404,16 +438,24 @@ export default class FeedableSource {
   readUpto(stopStr) {
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
+      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       let match = true;
       for (let j = 0; j < stopLength; j++) {
         if (this.buffer[i + j] !== stopStr[j]) { match = false; break; }
       }
       if (match) {
         const result = this.buffer.substring(this.startIndex, i);
-        this._advanceLineCol(i + stopLength);
-        this.startIndex = i + stopLength;
+        const end = i + stopLength;
+        // Already counted every '\n' up to (not including) i above — the
+        // matched stop string itself never contains one (it's a fixed XML
+        // delimiter like '</tagname' or ']]>').
+        if (newlineCount > 0) this.line += newlineCount, this.cols = end - lastNewlineIdx - 1;
+        else this.cols += end - this.startIndex;
+        this.startIndex = end;
         return result;
       }
     }
@@ -451,8 +493,11 @@ export default class FeedableSource {
     const stopLength = stopStr.length;
     let tagMatchStart = -1;
     let state = 0; // 0=scanning, 1=tag-name matched (scanning for '>'), 2=full match
+    let newlineCount = 0;
+    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
+      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       if (state === 1) {
         const c = this.buffer[i];
         if (c === ' ' || c === '\t') continue;
@@ -472,8 +517,10 @@ export default class FeedableSource {
       }
       if (state === 2) {
         const result = this.buffer.substring(this.startIndex, tagMatchStart);
-        this._advanceLineCol(i + 1);
-        this.startIndex = i + 1;
+        const end = i + 1;
+        if (newlineCount > 0) this.line += newlineCount, this.cols = end - lastNewlineIdx - 1;
+        else this.cols += end - this.startIndex;
+        this.startIndex = end;
         return result;
       }
     }
@@ -493,8 +540,20 @@ export default class FeedableSource {
    */
   updateBufferBoundary(n = 1) {
     const end = this.startIndex + n;
-    this._advanceLineCol(end);
-    this.startIndex = end;
+    const pendingEnd = this._pendingScanEnd;
+    this._pendingScanEnd = -1;
+    if (pendingEnd !== -1 && end === pendingEnd + 1) {
+      if (this._pendingScanNewlineCount > 0) {
+        this.line += this._pendingScanNewlineCount;
+        this.cols = end - this._pendingScanLastNewlineIdx - 1;
+      } else {
+        this.cols += end - this.startIndex;
+      }
+      this.startIndex = end;
+    } else {
+      this._advanceLineCol(end);
+      this.startIndex = end;
+    }
     // No "any mark active" gate here — flush()'s own min(startIndex, marks...)
     // origin computation already guarantees any in-progress token (at either
     // mark level) survives the trim. A separate boolean gate on top of that

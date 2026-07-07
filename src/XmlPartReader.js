@@ -7,6 +7,38 @@ import { isSpace } from "./util.js"
 export { flushAttributes } from './AttributeProcessor.js';
 
 /**
+ * Try to match an upcoming closing tag against the name we already expect
+ * (the tag sitting on top of the stack) without reading it into a string
+ * first. Peeks character-by-character (no consumption) — a mismatch, or
+ * running out of buffered data, costs nothing to undo since nothing was
+ * consumed. Caller falls back to the normal read+validate+compare path in
+ * either case, so this never needs its own error handling or chunk-boundary
+ * logic.
+ *
+ * On success, only whitespace is allowed between the name and '>' — matches
+ * XML's own grammar for ETag (`</tag ... >`, no attributes permitted).
+ *
+ * @param {Source} source
+ * @param {string} expectedRawName - the raw (pre namespace-stripped) name
+ *   the currently-open tag was written with
+ * @returns {number} characters to consume (name + whitespace + '>'), or -1
+ *   if this isn't a match (or not enough data yet to tell)
+ */
+export function tryMatchClosingTagName(source, expectedRawName) {
+  // false (mismatch) and null (not enough buffered data yet) both fall back
+  // to the same slow path below, so both collapse to -1 here.
+  if (source.matchAhead(expectedRawName) !== true) return -1;
+  let i = expectedRawName.length;
+  let c = source.readChAt(i);
+  while (c === ' ' || c === '\t' || c === '\n' || c === '\r') {
+    i++;
+    c = source.readChAt(i);
+  }
+  if (c !== '>') return -1;
+  return i + 1;
+}
+
+/**
  * Read closing tag name.
  *
  * Uses level-1 (inner) mark so flush() knows the safe trim boundary while
@@ -171,7 +203,7 @@ function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false) {
   tagExp.tagName = tagExp.tagName.trimEnd();
   tagExp._attrsExp = attrsExp;
 
-  if (!parser.getNameValidator('qName')(tagExp.tagName)) {
+  if (!parser.isValidQName(tagExp.tagName)) {
     throw new ParseError("Invalid tag name", ErrorCode.INVALID_TAG_NAME);
   }
 

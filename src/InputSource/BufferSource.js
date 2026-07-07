@@ -74,6 +74,15 @@ export default class BufferSource {
     // Token-start checkpoint for mark/rewind (mirrors FeedableSource API).
     this._tokenStart = -1;
 
+    // See StringSource.js's copy of this comment — same handoff between
+    // scanTagExpEnd() and updateBufferBoundary(), same reason for plain
+    // fields over a per-call object. Lives here (not in the strategy
+    // factories) since this is where every other instance field is set.
+    this._pendingScanEnd = -1;
+    this._pendingScanNewlineCount = 0;
+    this._pendingScanLastNewlineIdx = -1;
+    this._pendingScanCharsSinceLastNewline = 0;
+
     // Resolve once, dispatch polymorphically from here on — no encoding
     // branching anywhere else in this class. See EncodingProfile.js.
     const strategy = profile?.scanStrategy ?? DEFAULT_SCAN_STRATEGY;

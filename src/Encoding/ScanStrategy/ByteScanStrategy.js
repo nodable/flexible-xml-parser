@@ -62,17 +62,55 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       return this.buffer.slice(from, from + n).toString(nodeEncoding);
     },
 
+    /**
+     * See StringSource.js for the full doc — same contract. Compares raw
+     * byte codes directly rather than going through decodeCharAt/readChAt:
+     * safe here because every literal this is ever called with (DOCTYPE
+     * keywords, tag names for closing-tag matching) is plain ASCII, and
+     * ASCII is always exactly one byte per character in every encoding this
+     * strategy handles (UTF-8, Latin-1, ASCII — see the module doc above
+     * for why that guarantee is what lets this whole strategy exist).
+     */
+    matchAhead(expected, caseInsensitive = false) {
+      const len = expected.length;
+      for (let i = 0; i < len; i++) {
+        const b = this.buffer[this.startIndex + i];
+        if (b === undefined) return null;
+        let code = b;
+        if (caseInsensitive && code >= 65 && code <= 90) code += 32; // 'A'-'Z' -> 'a'-'z'
+        if (code !== expected.charCodeAt(i)) return false;
+      }
+      return true;
+    },
+
     scanTagExpEnd() {
       const buf = this.buffer;
       const len = buf.length;
       const start = this.startIndex;
       let inSingle = false;
       let inDouble = false;
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
+      let charsSinceLastNewline = 0;
       for (let i = start; i < len; i++) {
         const c = buf[i];
         if (c === 39) { if (!inDouble) inSingle = !inSingle; }
         else if (c === 34) { if (!inSingle) inDouble = !inDouble; }
-        else if (c === 62 && !inSingle && !inDouble) return i - start;
+        else if (c === 62 && !inSingle && !inDouble) {
+          // Same fix as StringSource.js — hand the already-collected newline
+          // bookkeeping to updateBufferBoundary() instead of re-walking this
+          // span a second time. charsSinceLastNewline also feeds _charCol,
+          // which ByteScanStrategy keeps incremental (see class comment).
+          // '>' itself is in-range for the original _advanceLineCol(end)
+          // scan (end = i+1), so it counts as one more char here too.
+          this._pendingScanEnd = i;
+          this._pendingScanNewlineCount = newlineCount;
+          this._pendingScanLastNewlineIdx = lastNewlineIdx;
+          this._pendingScanCharsSinceLastNewline = charsSinceLastNewline + 1;
+          return i - start;
+        }
+        if (c === 10) { newlineCount++; lastNewlineIdx = i; charsSinceLastNewline = 0; }
+        else if (!isContinuationByte(c)) { charsSinceLastNewline++; }
       }
       return -1;
     },
@@ -100,15 +138,24 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       const inputLength = this.buffer.length;
       const stopLength = stopStr.length;
       const stopBuffer = Buffer.from(stopStr);
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
+      let charsSinceLastNewline = 0;
       for (let i = this.startIndex; i < inputLength; i++) {
+        const b = this.buffer[i];
+        if (b === 10) { newlineCount++; lastNewlineIdx = i; charsSinceLastNewline = 0; }
+        else if (!isContinuationByte(b)) { charsSinceLastNewline++; }
         let match = true;
         for (let j = 0; j < stopLength; j++) {
           if (this.buffer[i + j] !== stopBuffer[j]) { match = false; break; }
         }
         if (match) {
           const result = this.buffer.slice(this.startIndex, i).toString(nodeEncoding);
-          this._advanceLineCol(i + stopLength);
-          this.startIndex = i + stopLength;
+          const end = i + stopLength;
+          if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+          else this.cols += end - this.startIndex;
+          this._charCol = lastNewlineIdx >= 0 ? charsSinceLastNewline + stopLength - 1 : this._charCol + charsSinceLastNewline + stopLength - 1;
+          this.startIndex = end;
           return result;
         }
       }
@@ -137,9 +184,14 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       const GT = 62;
       let tagMatchStart = -1;
       let state = 0;
+      let newlineCount = 0;
+      let lastNewlineIdx = -1;
+      let charsSinceLastNewline = 0;
       for (let i = this.startIndex; i < inputLength; i++) {
+        const b = this.buffer[i];
+        if (b === 10) { newlineCount++; lastNewlineIdx = i; charsSinceLastNewline = 0; }
+        else if (!isContinuationByte(b)) { charsSinceLastNewline++; }
         if (state === 1) {
-          const b = this.buffer[i];
           if (b === Constants.space || b === Constants.tab) continue;
           if (b === GT) { state = 2; }
           else { state = 0; tagMatchStart = -1; }
@@ -148,12 +200,15 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
           for (let j = 0; j < stopLength; j++) {
             if (this.buffer[i + j] !== stopBuffer[j]) { matched = false; break; }
           }
-          if (matched) { state = 1; tagMatchStart = i; i += stopLength - 1; }
+          if (matched) { state = 1; tagMatchStart = i; charsSinceLastNewline += stopLength - 1; i += stopLength - 1; }
         }
         if (state === 2) {
           const result = this.buffer.slice(this.startIndex, tagMatchStart).toString(nodeEncoding);
-          this._advanceLineCol(i + 1);
-          this.startIndex = i + 1;
+          const end = i + 1;
+          if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
+          else this.cols += end - this.startIndex;
+          this._charCol = lastNewlineIdx >= 0 ? charsSinceLastNewline : this._charCol + charsSinceLastNewline;
+          this.startIndex = end;
           return result;
         }
       }
@@ -173,8 +228,21 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
 
     updateBufferBoundary(n = 1) {
       const end = this.startIndex + n;
-      this._advanceLineCol(end);
-      this.startIndex = end;
+      const pendingEnd = this._pendingScanEnd;
+      this._pendingScanEnd = -1;
+      if (pendingEnd !== -1 && end === pendingEnd + 1) {
+        if (this._pendingScanNewlineCount > 0) {
+          this.line += this._pendingScanNewlineCount;
+          this.cols = end - this._pendingScanLastNewlineIdx - 1;
+        } else {
+          this.cols += end - this.startIndex;
+        }
+        this._charCol = this._pendingScanLastNewlineIdx >= 0 ? this._pendingScanCharsSinceLastNewline : this._charCol + this._pendingScanCharsSinceLastNewline;
+        this.startIndex = end;
+      } else {
+        this._advanceLineCol(end);
+        this.startIndex = end;
+      }
       if (this.autoFlush && this.startIndex >= this.flushThreshold && this._tokenStart < 0) {
         this.flush();
       }
