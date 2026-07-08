@@ -99,7 +99,7 @@ export const defaultOptions = {
   //
   //   collectErrors — when true, errors are recorded in result.__parseErrors instead
   //                   of being silently dropped.  Each entry has the shape:
-  //                   { type, tag, expected, line, col, index }
+  //                   { type, tag, expected, index }
   //
   // Shorthand: autoClose: 'html' sets onEof:'closeAll', onMismatch:'discard',
   // collectErrors:true, and adds the standard HTML void elements to tags.unpaired.

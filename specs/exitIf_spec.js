@@ -342,8 +342,6 @@ xdescribe("exitIf — onExit builder callback", function () {
     expect(info).toBeDefined();
     expect(info.enumerable).toBe(false);
     expect(info.value.tag).toBe("stop");
-    expect(typeof info.value.line).toBe("number");
-    expect(typeof info.value.col).toBe("number");
     expect(typeof info.value.index).toBe("number");
     expect(typeof info.value.depth).toBe("number");
   });

@@ -153,7 +153,7 @@ new XMLParser({
 
 `customDecoders` is scoped to the one `XMLParser` instance it's passed to — it doesn't leak into other instances in the same process.
 
-See [16-encoding.md](./16-encoding.md) for the full internals (why `BufferSource` needs this in particular, how streaming auto-detection buffers bytes until it knows the encoding, and how error line/column stay accurate for multi-byte characters).
+See [16-encoding.md](./16-encoding.md) for the full internals (why `BufferSource` needs this in particular, and how streaming auto-detection buffers bytes until it knows the encoding). Position reporting throughout the parser is index-only — no line/column tracking.
 
 ---
 

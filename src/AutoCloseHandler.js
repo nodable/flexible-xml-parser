@@ -82,8 +82,6 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.UNCLOSED_EOF, {
         tag: current.name,
         expected: null,
-        line: current.line,
-        col: current.col,
         index: current.index,
       });
 
@@ -114,7 +112,7 @@ export default class AutoCloseHandler {
       throw new ParseError(
         `Unexpected closing tag '${closingTagName}' expecting '${currentTagDetail.name}'`,
         ErrorCode.MISMATCHED_CLOSE_TAG,
-        { line: source ? source.line : undefined, col: source ? source.cols : undefined, index: source ? source.startIndex : undefined }
+        { index: source ? source.startIndex : undefined }
       );
     }
 
@@ -122,8 +120,6 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.MISMATCHED_CLOSE, {
         tag: closingTagName,
         expected: currentTagDetail.name,
-        line: source ? source.line : null,
-        col: source ? source.cols : null,
         index: source ? source.startIndex : null,
       });
       return { action: 'discard' };
@@ -152,8 +148,6 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.PHANTOM_CLOSE, {
         tag: closingTagName,
         expected: currentTagDetail.name,
-        line: source ? source.line : null,
-        col: source ? source.cols : null,
         index: source ? source.startIndex : null,
       });
       return { action: 'discard' };
@@ -169,8 +163,6 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.MISMATCHED_CLOSE, {
         tag: tag.name,
         expected: closingTagName,
-        line: tag.line,
-        col: tag.col,
         index: tag.index,
       });
 
@@ -197,8 +189,6 @@ export default class AutoCloseHandler {
     this._recordError(AutoCloseErrorType.PARTIAL_TAG, {
       tag: _extractPartialTagName(originalError),
       expected: null,
-      line: parserState.source ? parserState.source.line : null,
-      col: parserState.source ? parserState.source.cols : null,
       index: parserState.source ? parserState.source.startIndex : null,
     });
 

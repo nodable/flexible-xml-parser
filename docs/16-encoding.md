@@ -97,18 +97,7 @@ You don’t have to choose – FXP picks the right one based on the encoding you
 
 For streaming input (`feed()`/`end()` or `parseStream()`), the parser buffers a small amount of raw bytes until it can determine the encoding, then decodes and continues. This ensures auto‑detection works even when the declaration is split across chunks.
 
-## 5. Error Positions (Line/Column) Are Now Correct for UTF‑8
-
-Previously, when an error occurred, the reported column number was based on **bytes**, not **characters**. For UTF‑8 text with multi‑byte characters (like `é` or `🎉`), the column could be off by one or more.
-
-FXP now tracks both a **byte column** and a **character column** simultaneously while scanning, at no extra cost. When an error is reported, it picks the correct one:
-
-- For UTF‑8 → uses the character column (so `"café"` and `"cafe"` show the same column for the same error).
-- For single‑byte encodings → byte column = character column, so no difference.
-
-This fix is also important because the parser records the start position of every tag (for `Xml2JsParser`), so correcting the column prevents off‑by‑one errors in nested structures.
-
-## 6. Important Limitations & Caveats
+## 5. Important Limitations & Caveats
 
 - **BOM vs declared encoding mismatch** – If the BOM says UTF‑8 but the XML declaration says `encoding="UTF‑16"`, the parser throws a hard error (`ENCODING_MISMATCH`). It does not silently pick one – that would be ambiguous and error‑prone.
 - **Streaming auto‑detection** – The parser may hold back up to ~200 bytes of the stream until it has enough to detect the encoding. This is usually fine, but for very small documents (shorter than that) it resolves at `end()`.
@@ -119,7 +108,7 @@ This fix is also important because the parser records the start position of ever
 
 ---
 
-## 7. Summary
+## 6. Summary
 
 | Aspect | What FXP does |
 |--------|---------------|
@@ -128,7 +117,7 @@ This fix is also important because the parser records the start position of ever
 | **Custom** | Register via `customDecoders` with a `StringDecoder`‑compatible factory |
 | **Fast path** | Byte‑scanning for self‑synchronizing encodings (UTF‑8, ASCII, Latin‑1) |
 | **Safe path** | Char‑scanning for everything else (UTF‑16, Shift_JIS, etc.) |
-| **Error columns** | Correct for multi‑byte characters (UTF‑8) |
+| **Error/position reporting** | Index-only (absolute offset) — no line/column tracking |
 | **Conflict handling** | BOM vs declared encoding mismatch → throws error |
 
 You can use the parser with any encoding you need, and the complexity is hidden behind a clean API. The default “just works” behaviour for UTF‑8 remains unchanged, while power users can plug in any encoding supported by the Node ecosystem.
@@ -173,9 +162,6 @@ ScanStrategy/
   CharScanStrategy.js      — char-indexed scanning on an eagerly-decoded
                              string, for everything else (utf16le/be, or a
                              custom encoding that isn't self-synchronizing)
-PositionCorrector/
-  PositionCorrectors.js    — O(1) pick() between byte-column and char-column
-                             (see "Error positions" below)
 ```
 
 `BufferSource` never branches on an encoding name. At construction it's handed
@@ -206,26 +192,22 @@ resolved one way.
   decoded and handed off normally. A short document that never crosses the
   threshold resolves at `end()` instead.
 
-## Error positions (`line`/`col`)
+## Position reporting (index-only)
 
-`BufferSource`'s byte-scan path counts `cols` in **bytes** internally for
-speed (unchanged from before this feature) — that's wrong to report directly
-for a multi-byte UTF-8 character. `ByteScanStrategy` maintains a *second*
-counter, `_charCol`, incrementally at O(1) per character (and in the same
-single pass `_advanceLineCol` already does for bulk text/attribute spans — no
-extra traversal). `PositionCorrector.pick(byteCol, charCol)` just returns
-whichever one is actually accurate for the active encoding — a plain field
-read, not a recomputation.
+FXP does not track line/column anywhere. Every source exposes a single
+`startIndex` — a character offset for `StringSource`/`FeedableSource`/
+`StreamSource`, or a byte offset for `BufferSource` (bytes, not characters,
+since that source scans the raw buffer directly for speed). `errorPositionOf()`
+in `util.js` just reads that field; there is no per-encoding correction step.
 
-*(An earlier version of this correction recomputed the column by rescanning
-the buffer, planned as "only pay at error time." That was wrong: FXP captures
-position once per **character**, not just on errors — Xml2JsParser's main
-loop uses it to record the accurate start of every tag. Rescanning per
-character turned an O(1) operation into O(line length), i.e. O(n²) overall.
-Fixed by tracking the character column incrementally instead. If you're
-touching this code, check every call site of a "corrector" or similar before
-assuming a lazy/error-path-only cost model is safe — it usually isn't unless
-you've actually verified nothing else calls it.)*
+This used to be a two-counter system (`cols` counted in bytes, a second
+`_charCol` counter maintained incrementally to correct it for multi-byte
+UTF-8) with its own `PositionCorrector` module. It was removed because
+nothing in the parser actually needs line/column — dropping the bookkeeping
+that produced it, on every character and every bulk-read span, is a
+straightforward speed win with no functional loss: a caller that wants
+line/column can still derive it from `index` plus the original document
+text.
 
 ## Adding a new encoding
 

@@ -161,16 +161,14 @@ describe('FeedableSource autoFlush', function () {
 
 describe('BufferSource.readFromBuffer (item 10b fix)', function () {
 
-  it('peek (shouldUpdate=false) does not mutate line/cols/startIndex', function () {
+  it('peek (shouldUpdate=false) does not mutate startIndex', function () {
     const source = new BufferSource(Buffer.from('ab\ncd'));
-    const before = { line: source.line, cols: source.cols, startIndex: source.startIndex };
+    const before = { startIndex: source.startIndex };
     source.readFromBuffer(3, false); // peeks "ab\n" without consuming
-    expect(source.line).toBe(before.line);
-    expect(source.cols).toBe(before.cols);
     expect(source.startIndex).toBe(before.startIndex);
   });
 
-  it('single-char consume matches readCh() line/col semantics (cols=0 after \\n, not 1)', function () {
+  it('single-char consume via readFromBuffer matches readCh() index advancement', function () {
     const viaReadFromBuffer = new BufferSource(Buffer.from('a\nb'));
     viaReadFromBuffer.readFromBuffer(1, true); // 'a'
     viaReadFromBuffer.readFromBuffer(1, true); // '\n'
@@ -179,30 +177,24 @@ describe('BufferSource.readFromBuffer (item 10b fix)', function () {
     viaReadCh.readCh(); // 'a'
     viaReadCh.readCh(); // '\n'
 
-    expect(viaReadFromBuffer.line).toBe(viaReadCh.line);
-    expect(viaReadFromBuffer.cols).toBe(viaReadCh.cols);
-    expect(viaReadFromBuffer.cols).toBe(0); // was 1 before the fix
+    expect(viaReadFromBuffer.startIndex).toBe(viaReadCh.startIndex);
+    expect(viaReadFromBuffer.startIndex).toBe(2);
   });
 
-  it('multi-char consume does not double-count a newline in the span', function () {
+  it('multi-char consume advances startIndex by exactly n', function () {
     const source = new BufferSource(Buffer.from('ab\ncd'));
     source.readFromBuffer(5, true); // consume entire buffer in one call
-    // Exactly one '\n' in the span -> line should advance by exactly 1.
-    expect(source.line).toBe(2);
-    // cols = chars after the last '\n' = "cd".length = 2, not 5 (old cols+=n bug)
-    // and not double-applied via a second independent line/col pass.
-    expect(source.cols).toBe(2);
+    expect(source.startIndex).toBe(5);
   });
 
-  it('multi-char consume matches char-by-char readCh() for line/col, across a newline', function () {
+  it('multi-char consume matches char-by-char readCh() for startIndex, across a newline', function () {
     const viaBulk = new BufferSource(Buffer.from('12\n345'));
     viaBulk.readFromBuffer(6, true);
 
     const viaChars = new BufferSource(Buffer.from('12\n345'));
     for (let i = 0; i < 6; i++) viaChars.readCh();
 
-    expect(viaBulk.line).toBe(viaChars.line);
-    expect(viaBulk.cols).toBe(viaChars.cols);
+    expect(viaBulk.startIndex).toBe(viaChars.startIndex);
   });
 
   it('returns the correct substring for both single-char and multi-char reads', function () {

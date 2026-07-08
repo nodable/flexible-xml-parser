@@ -61,18 +61,12 @@ export const criticalProperties = ["__proto__", "constructor", "prototype"];
 /**
  * Uniform error-position accessor across all InputSource types.
  *
- * Only BufferSource (UTF-8 byte-scan) currently needs real correction —
- * see Encoding/PositionCorrector/PositionCorrectors.js. Every other source
- * (StringSource, FeedableSource, and BufferSource on decode-first/
- * single-byte encodings) already tracks accurate line/col, so this is a
- * cheap passthrough for them, not a new cost on the hot path — correction
- * only ever runs here, once, at the moment a ParseError is being built.
+ * Position reporting is index-only (absolute offset from document start) —
+ * no line/column. Every InputSource exposes `startIndex` the same way, so
+ * this is a plain passthrough, not a per-source branch.
  */
 export function errorPositionOf(source) {
-  if (typeof source.correctedPosition === 'function') {
-    return source.correctedPosition();
-  }
-  return { line: source.line, col: source.cols, index: source.startIndex };
+  return { index: source.startIndex };
 }
 
 /**

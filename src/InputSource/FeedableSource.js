@@ -59,17 +59,9 @@ const SNIFF_CAP = 200;
  */
 export default class FeedableSource {
   constructor(options = {}) {
-    this.line = 1;
-    this.cols = 0;
     this.buffer = '';
     this.startIndex = 0;
     this.isComplete = false;
-
-    // See StringSource.js's copy of this comment — same handoff, same
-    // reason for using plain fields instead of a per-call object.
-    this._pendingScanEnd = -1;
-    this._pendingScanNewlineCount = 0;
-    this._pendingScanLastNewlineIdx = -1;
 
     this.maxBufferSize = options.maxBufferSize || 10 * 1024 * 1024; // 10 MB
     this.autoFlush = options.autoFlush !== false;            // true by default
@@ -106,13 +98,9 @@ export default class FeedableSource {
      * _marks[1] — inner mark: set by individual reader functions.
      *             Used only by flush() as the safe trim boundary.
      *
-     * `null` means "not set" for that level.
-     *
-     * Each entry is { startIndex, line, cols } (or null when unset) — line/cols
-     * are captured alongside startIndex so a rewind can undo readCh()'s
-     * line/col advancement too, not just the buffer offset. Without this,
-     * any token that fails mid-read (UNEXPECTED_END) and gets replayed on
-     * the next feed() double-counts every '\n' it consumed before failing.
+     * `null` means "not set" for that level. Each entry is a plain startIndex
+     * number — no line/col to carry alongside it, since position reporting
+     * is index-only.
      */
     this._marks = [null, null];
 
@@ -261,7 +249,7 @@ export default class FeedableSource {
    * @param {0|1} [level=0]
    */
   markTokenStart(level = 0) {
-    this._marks[level] = { startIndex: this.startIndex, line: this.line, cols: this.cols };
+    this._marks[level] = this.startIndex;
   }
 
   /**
@@ -275,9 +263,7 @@ export default class FeedableSource {
    */
   rewindToMark() {
     if (this._marks[0] !== null) {
-      this.startIndex = this._marks[0].startIndex;
-      this.line = this._marks[0].line;
-      this.cols = this._marks[0].cols;
+      this.startIndex = this._marks[0];
     }
     this._marks[0] = null;
     this._marks[1] = null;
@@ -305,16 +291,7 @@ export default class FeedableSource {
    * @returns {string}
    */
   readCh() {
-    const ch = this.buffer[this.startIndex++];
-
-    if (ch === '\n') {
-      this.line++;
-      this.cols = 0;
-    } else {
-      this.cols++;
-    }
-
-    return ch;
+    return this.buffer[this.startIndex++];
   }
 
   /**
@@ -379,8 +356,6 @@ export default class FeedableSource {
     const start = this.startIndex;
     let inSingle = false;
     let inDouble = false;
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
@@ -388,15 +363,7 @@ export default class FeedableSource {
       } else if (c === '"') {
         if (!inSingle) inDouble = !inDouble;
       } else if (c === '>' && !inSingle && !inDouble) {
-        // See StringSource.js's copy of this method for why — same fix,
-        // same reason, kept consistent across all input sources.
-        this._pendingScanEnd = i;
-        this._pendingScanNewlineCount = newlineCount;
-        this._pendingScanLastNewlineIdx = lastNewlineIdx;
         return i - start;
-      } else if (c === '\n') {
-        newlineCount++;
-        lastNewlineIdx = i;
       }
     }
     return -1;
@@ -408,54 +375,18 @@ export default class FeedableSource {
    * @returns {string} content before the stop string (stop string is consumed)
    * @throws {ParseError} UNEXPECTED_END when stop string is not found
    */
-  /**
-   * Scan buffer[this.startIndex, end) for '\n' and advance line/cols to match,
-   * mirroring readCh()'s per-char logic. Does NOT touch startIndex — callers
-   * set that themselves afterwards (their "end" is not always startIndex + n;
-   * readUptoCloseTag's consumed span includes the matched stop string).
-   *
-   * Shared by updateBufferBoundary() and the readUpto*() family so every path
-   * that advances the cursor in bulk keeps line/col accurate, not just the
-   * single-character readCh() path.
-   *
-   * @param {number} end — exclusive end of the span being skipped
-   */
-  _advanceLineCol(end) {
-    let lastNewlineIdx = -1;
-    for (let i = this.startIndex; i < end; i++) {
-      if (this.buffer[i] === '\n') {
-        this.line++;
-        lastNewlineIdx = i;
-      }
-    }
-    if (lastNewlineIdx >= 0) {
-      this.cols = end - lastNewlineIdx - 1;
-    } else {
-      this.cols += end - this.startIndex;
-    }
-  }
-
   readUpto(stopStr) {
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
-      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       let match = true;
       for (let j = 0; j < stopLength; j++) {
         if (this.buffer[i + j] !== stopStr[j]) { match = false; break; }
       }
       if (match) {
         const result = this.buffer.substring(this.startIndex, i);
-        const end = i + stopLength;
-        // Already counted every '\n' up to (not including) i above — the
-        // matched stop string itself never contains one (it's a fixed XML
-        // delimiter like '</tagname' or ']]>').
-        if (newlineCount > 0) this.line += newlineCount, this.cols = end - lastNewlineIdx - 1;
-        else this.cols += end - this.startIndex;
-        this.startIndex = end;
+        this.startIndex = i + stopLength;
         return result;
       }
     }
@@ -477,7 +408,6 @@ export default class FeedableSource {
       throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
     }
     const result = this.buffer.substring(this.startIndex, i);
-    this._advanceLineCol(i + 1);
     this.startIndex = i + 1;
     return result;
   }
@@ -493,11 +423,8 @@ export default class FeedableSource {
     const stopLength = stopStr.length;
     let tagMatchStart = -1;
     let state = 0; // 0=scanning, 1=tag-name matched (scanning for '>'), 2=full match
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
-      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       if (state === 1) {
         const c = this.buffer[i];
         if (c === ' ' || c === '\t') continue;
@@ -517,10 +444,7 @@ export default class FeedableSource {
       }
       if (state === 2) {
         const result = this.buffer.substring(this.startIndex, tagMatchStart);
-        const end = i + 1;
-        if (newlineCount > 0) this.line += newlineCount, this.cols = end - lastNewlineIdx - 1;
-        else this.cols += end - this.startIndex;
-        this.startIndex = end;
+        this.startIndex = i + 1;
         return result;
       }
     }
@@ -539,21 +463,7 @@ export default class FeedableSource {
    * @param {number} [n=1]
    */
   updateBufferBoundary(n = 1) {
-    const end = this.startIndex + n;
-    const pendingEnd = this._pendingScanEnd;
-    this._pendingScanEnd = -1;
-    if (pendingEnd !== -1 && end === pendingEnd + 1) {
-      if (this._pendingScanNewlineCount > 0) {
-        this.line += this._pendingScanNewlineCount;
-        this.cols = end - this._pendingScanLastNewlineIdx - 1;
-      } else {
-        this.cols += end - this.startIndex;
-      }
-      this.startIndex = end;
-    } else {
-      this._advanceLineCol(end);
-      this.startIndex = end;
-    }
+    this.startIndex += n;
     // No "any mark active" gate here — flush()'s own min(startIndex, marks...)
     // origin computation already guarantees any in-progress token (at either
     // mark level) survives the trim. A separate boolean gate on top of that
@@ -584,17 +494,16 @@ export default class FeedableSource {
     // Determine the earliest position that must be kept.
     let origin = this.startIndex;
     for (const m of this._marks) {
-      if (m !== null && m.startIndex < origin) origin = m.startIndex;
+      if (m !== null && m < origin) origin = m;
     }
 
     if (origin > 0) {
       this.buffer = this.buffer.substring(origin);
 
-      // Adjust all mark buffer-offsets by the amount trimmed.
-      // line/cols are not buffer-relative — they stay untouched.
+      // Adjust all mark offsets by the amount trimmed.
       const marksLen = this._marks.length;
       for (let i = 0; i < marksLen; i++) {
-        if (this._marks[i] !== null) this._marks[i].startIndex -= origin;
+        if (this._marks[i] !== null) this._marks[i] -= origin;
       }
 
       this.startIndex -= origin;

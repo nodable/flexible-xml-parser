@@ -21,6 +21,12 @@ import { ParseError, ErrorCode } from '../ParseError.js';
  *
  * Auto-flush fires inside updateBufferBoundary() whenever the processed
  * portion exceeds flushThreshold and no token checkpoint is active.
+ *
+ * Position reporting is index-only (absolute character offset from document
+ * start) — no line/column tracking. That bookkeeping used to run on every
+ * character and every bulk-read span for a field most callers never read;
+ * dropping it is a straight speed win. A caller that wants line/column can
+ * derive it from `index` plus the original document text.
  */
 export default class StringSource {
   /**
@@ -30,8 +36,6 @@ export default class StringSource {
    * @param {number}  [options.flushThreshold=1024] — flush after this many processed chars
    */
   constructor(str, options = {}) {
-    this.line = 1;
-    this.cols = 0;
     this.buffer = str;
     // Boundary pointer: data before this index has been consumed and may be freed.
     this.startIndex = 0;
@@ -44,15 +48,6 @@ export default class StringSource {
     // -1 means "not set" for that level.
     this._marks = [-1, -1];
 
-    // Handoff from scanTagExpEnd() to updateBufferBoundary() so the latter
-    // doesn't have to re-walk a span already scanned once (see both methods
-    // below). Plain fields, not an object — this handoff happens on every
-    // single tag, so a fresh object per tag would trade one small scan for
-    // one small allocation, a wash at best on ordinary short tags and a net
-    // loss under GC pressure on a big real document. -1 = nothing pending.
-    this._pendingScanEnd = -1;
-    this._pendingScanNewlineCount = 0;
-    this._pendingScanLastNewlineIdx = -1;
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────
@@ -118,14 +113,7 @@ export default class StringSource {
   // ─── Core read interface ──────────────────────────────────────────────────
 
   readCh() {
-    const ch = this.buffer[this.startIndex++];
-    if (ch === '\n') {
-      this.line++;
-      this.cols = 0;
-    } else {
-      this.cols++;
-    }
-    return ch;
+    return this.buffer[this.startIndex++];
   }
 
   readChAt(index) {
@@ -183,8 +171,6 @@ export default class StringSource {
     const start = this.startIndex;
     let inSingle = false;
     let inDouble = false;
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
@@ -192,69 +178,24 @@ export default class StringSource {
       } else if (c === '"') {
         if (!inSingle) inDouble = !inDouble;
       } else if (c === '>' && !inSingle && !inDouble) {
-        // This walk already visited every char in [start, i] — hand the
-        // newline bookkeeping to updateBufferBoundary() so it doesn't have
-        // to re-walk the same span a second time (see
-        // SAVEPOINT_closing_tag_and_double_scan.md). Single-use: whichever
-        // call reads this next (a matching updateBufferBoundary call, or a
-        // different read entirely) consumes/clears it.
-        this._pendingScanEnd = i;
-        this._pendingScanNewlineCount = newlineCount;
-        this._pendingScanLastNewlineIdx = lastNewlineIdx;
         return i - start;
-      } else if (c === '\n') {
-        newlineCount++;
-        lastNewlineIdx = i;
       }
     }
     return -1;
   }
 
-  /**
-   * Scan buffer[this.startIndex, end) for '\n' and advance line/cols to match,
-   * mirroring readCh()'s per-char logic. Does NOT touch startIndex — callers
-   * set that themselves afterwards (their "end" is not always startIndex + n;
-   * readUptoCloseTag's consumed span includes the matched stop string).
-   *
-   * Shared by updateBufferBoundary() and the readUpto*() family so every path
-   * that advances the cursor in bulk keeps line/col accurate, not just the
-   * single-character readCh() path.
-   *
-   * @param {number} end — exclusive end of the span being skipped
-   */
-  _advanceLineCol(end) {
-    let lastNewlineIdx = -1;
-    for (let i = this.startIndex; i < end; i++) {
-      if (this.buffer[i] === '\n') {
-        this.line++;
-        lastNewlineIdx = i;
-      }
-    }
-    if (lastNewlineIdx >= 0) {
-      this.cols = end - lastNewlineIdx - 1;
-    } else {
-      this.cols += end - this.startIndex;
-    }
-  }
-
   readUpto(stopStr) {
     const inputLength = this.buffer.length;
     const stopLength = stopStr.length;
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
-      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       let match = true;
       for (let j = 0; j < stopLength; j++) {
         if (this.buffer[i + j] !== stopStr[j]) { match = false; break; }
       }
       if (match) {
         const result = this.buffer.substring(this.startIndex, i);
-        const end = i + stopLength;
-        if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
-        else this.cols += end - this.startIndex;
-        this.startIndex = end;
+        this.startIndex = i + stopLength;
         return result;
       }
     }
@@ -276,7 +217,6 @@ export default class StringSource {
       throw new ParseError(`Unexpected end of source reading '${stopChar}'`, ErrorCode.UNEXPECTED_END);
     }
     const result = this.buffer.substring(this.startIndex, i);
-    this._advanceLineCol(i + 1);
     this.startIndex = i + 1;
     return result;
   }
@@ -287,11 +227,8 @@ export default class StringSource {
     let tagMatchStart = -1;
     // 0: scanning, 1: tag-name matched (scanning for '>'), 2: full match
     let state = 0;
-    let newlineCount = 0;
-    let lastNewlineIdx = -1;
 
     for (let i = this.startIndex; i < inputLength; i++) {
-      if (this.buffer[i] === '\n') { newlineCount++; lastNewlineIdx = i; }
       if (state === 1) {
         const c = this.buffer[i];
         if (c === ' ' || c === '\t') continue;
@@ -311,10 +248,7 @@ export default class StringSource {
       }
       if (state === 2) {
         const result = this.buffer.substring(this.startIndex, tagMatchStart);
-        const end = i + 1;
-        if (newlineCount > 0) { this.line += newlineCount; this.cols = end - lastNewlineIdx - 1; }
-        else this.cols += end - this.startIndex;
-        this.startIndex = end;
+        this.startIndex = i + 1;
         return result;
       }
     }
@@ -341,29 +275,7 @@ export default class StringSource {
    * @param {number} [n=1]
    */
   updateBufferBoundary(n = 1) {
-    const end = this.startIndex + n;
-
-    // If the immediately-preceding scanTagExpEnd() already walked this exact
-    // span looking for '>', reuse its newline count instead of walking the
-    // whole tag+attributes text a second time — see scanTagExpEnd() above
-    // and SAVEPOINT_closing_tag_and_double_scan.md. Only valid when `end`
-    // matches what that scan actually covered (guards against any other
-    // caller shape); always cleared here so a stale stash can never leak
-    // into an unrelated call.
-    const pendingEnd = this._pendingScanEnd;
-    this._pendingScanEnd = -1;
-    if (pendingEnd !== -1 && end === pendingEnd + 1) {
-      if (this._pendingScanNewlineCount > 0) {
-        this.line += this._pendingScanNewlineCount;
-        this.cols = end - this._pendingScanLastNewlineIdx - 1;
-      } else {
-        this.cols += end - this.startIndex;
-      }
-      this.startIndex = end;
-    } else {
-      this._advanceLineCol(end);
-      this.startIndex = end;
-    }
+    this.startIndex += n;
     // See FeedableSource.updateBufferBoundary() for why there is no "any mark
     // active" gate here — flush()'s own min-origin computation already
     // protects any in-progress token; a separate gate was redundant and, since

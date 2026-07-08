@@ -1,8 +1,8 @@
 /**
- * position-metadata_spec.js — FXP v1.5.0
+ * position-metadata_spec.js — FXP
  *
- * Tests for the new position-metadata contract (CLAUDE.md §14):
- *   - TagDetail.index/line/col now points at '<' (not past '>')
+ * Tests for the position-metadata contract (CLAUDE.md §14):
+ *   - TagDetail.index now points at '<' (not past '>') — index-only, no line/col
  *   - TagDetail.openEnd — offset right after the opening tag's '>'
  *   - closeElement(matcher, closeMeta) — new 2nd arg
  *   - addAttribute(name, value, matcher, attrMeta) — new 4th arg
@@ -45,7 +45,7 @@ function makeRecordingParser(SubclassFn, parserOptions = {}) {
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-describe("Position metadata — TagDetail.index/line/col points at '<'", function () {
+describe("Position metadata — TagDetail.index points at '<'", function () {
 
   runAcrossAllInputSourcesWithFactory(
     "root tag index should be 0 (position of '<', not past '>')",
@@ -54,38 +54,30 @@ describe("Position metadata — TagDetail.index/line/col points at '<'", functio
       const evts = parser._events;
       const root = evts.find(e => e.name === "root");
       const child = evts.find(e => e.name === "child");
-      // console.log(evts)
       expect(root.index).toBe(0);
-      expect(root.line).toBe(1);
-      expect(root.col).toBe(0);
       // <child> starts right after <root> (6 chars)
       expect(child.index).toBe(6);
     },
     () => makeRecordingParser(events => class extends CompactBuilder {
       addElement(tag, matcher) {
-        events.push({ name: tag.name, index: tag.index, line: tag.line, col: tag.col });
+        events.push({ name: tag.name, index: tag.index });
         super.addElement(tag, matcher);
       }
     })
   );
 
   runAcrossAllInputSourcesWithFactory(
-    "line and col should increment correctly across a newline",
+    "index keeps advancing correctly across a newline",
     `<root>\n  <child>x</child>\n</root>`,
     (result, inputType, parser) => {
       const evts = parser._events;
-      // console.log(evts)
-      const root = evts.find(e => e.name === "root");
       const child = evts.find(e => e.name === "child");
-
-      // expect(root.line).toBe(1);
-      // expect(root.col).toBe(2);
-      expect(child.line).toBe(2);
-      expect(child.col).toBe(2); // 2 leading spaces → col 3
+      // <root>\n  = 6 + 1 + 2 = 9 chars before <child>
+      expect(child.index).toBe(9);
     },
     () => makeRecordingParser(events => class extends CompactBuilder {
       addElement(tag, matcher) {
-        events.push({ name: tag.name, line: tag.line, col: tag.col });
+        events.push({ name: tag.name, index: tag.index });
         super.addElement(tag, matcher);
       }
     })
@@ -222,16 +214,14 @@ describe("Position metadata — closeElement closeMeta", function () {
   );
 
   runAcrossAllInputSourcesWithFactory(
-    "stop-node closeMeta has only {name, closeEnd} — no fabricated index/line/col",
+    "stop-node closeMeta has only {name, closeEnd} — no fabricated index",
     `<root><script>x</script></root>`,
     (result, inputType, parser) => {
       const script = parser._events.find(e => e.name === "script");
       expect(script.name).toBe("script");
       expect(typeof script.closeEnd).toBe("number");
-      // StopNodeProcessor doesn't track '</script' start — these must be absent
+      // StopNodeProcessor doesn't track '</script' start — this must be absent
       expect(script.index).toBeUndefined();
-      expect(script.line).toBeUndefined();
-      expect(script.col).toBeUndefined();
     },
     () => makeRecordingParser(events => class extends CompactBuilder {
       closeElement(matcher, closeMeta) {

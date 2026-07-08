@@ -12,14 +12,18 @@ import { ParseError, ErrorCode } from '../ParseError.js';
  *                         //   can never appear as part of a multi-byte sequence.
  *                         //   Only self-synchronizing encodings are eligible for
  *                         //   BufferSource's byte-level scan fast path.
- *     variableWidth       // boolean — true if bytes-per-character varies (affects
- *                         //   whether a PositionCorrector is needed at all)
+ *     variableWidth       // boolean — true if bytes-per-character varies.
+ *                         //   Informational only for now (position reporting
+ *                         //   is index-only, so nothing currently branches
+ *                         //   on this) — kept on the descriptor shape so
+ *                         //   existing custom-encoding registrations don't
+ *                         //   need to change.
  *     createDecoder()     // -> { write(buf): string, end(): string } stateful decoder
  *   }
  *
  * SRP: this class only stores/validates/resolves descriptors. It knows nothing
- * about scanning strategy or position correction — see ScanStrategy/ and
- * PositionCorrector/, composed together in EncodingProfile.js.
+ * about scanning strategy — see ScanStrategy/, composed together in
+ * EncodingProfile.js.
  */
 export default class EncodingRegistry {
   constructor() {

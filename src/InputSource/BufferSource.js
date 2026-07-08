@@ -1,6 +1,5 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
-import { createByteScanStrategy, decodeCharAtUtf8, isUtf8ContinuationByte } from '../Encoding/ScanStrategy/ByteScanStrategy.js';
-import { NoOpPositionCorrector, Utf8BytePositionCorrector } from '../Encoding/PositionCorrector/PositionCorrectors.js';
+import { createByteScanStrategy, decodeCharAtUtf8 } from '../Encoding/ScanStrategy/ByteScanStrategy.js';
 
 const Constants = {
   space: 32,
@@ -12,7 +11,7 @@ const Constants = {
 // byte-scan. Identical output/cost to the pre-encoding-feature code for pure
 // ASCII content (the common case) and correctly decodes multi-byte UTF-8,
 // which the old raw fromCharCode() path did not.
-const DEFAULT_SCAN_STRATEGY = createByteScanStrategy(decodeCharAtUtf8, 'utf8', isUtf8ContinuationByte);
+const DEFAULT_SCAN_STRATEGY = createByteScanStrategy(decodeCharAtUtf8, 'utf8');
 
 /**
  * BufferSource — input source backed by a Node.js Buffer (byte array).
@@ -52,10 +51,8 @@ export default class BufferSource {
    *   go through XMLParser).
    */
   constructor(bytesArr, options = {}, profile = null) {
-    this.line = 1;
-    this.cols = 0;
     // BOM bytes (if any) are detection artifacts, not content — strip them
-    // and exclude from all position counting.
+    // and exclude from the index.
     this.buffer = profile?.bomLength ? bytesArr.subarray(profile.bomLength) : bytesArr;
     if (profile?.decodeFirst) {
       // Not self-synchronizing (UTF-16, or a custom encoding that didn't
@@ -66,7 +63,6 @@ export default class BufferSource {
       this.buffer = decoder.write(this.buffer) + decoder.end();
     }
     this.startIndex = 0;
-    this._charCol = 0; // maintained incrementally by ByteScanStrategy, O(1) per call; see PositionCorrector
 
     this.autoFlush = options.autoFlush !== false;
     this.flushThreshold = options.flushThreshold ?? 1024;
@@ -74,33 +70,11 @@ export default class BufferSource {
     // Token-start checkpoint for mark/rewind (mirrors FeedableSource API).
     this._tokenStart = -1;
 
-    // See StringSource.js's copy of this comment — same handoff between
-    // scanTagExpEnd() and updateBufferBoundary(), same reason for plain
-    // fields over a per-call object. Lives here (not in the strategy
-    // factories) since this is where every other instance field is set.
-    this._pendingScanEnd = -1;
-    this._pendingScanNewlineCount = 0;
-    this._pendingScanLastNewlineIdx = -1;
-    this._pendingScanCharsSinceLastNewline = 0;
-
     // Resolve once, dispatch polymorphically from here on — no encoding
     // branching anywhere else in this class. See EncodingProfile.js.
     const strategy = profile?.scanStrategy ?? DEFAULT_SCAN_STRATEGY;
     Object.assign(this, strategy);
-    this._positionCorrector = profile?.positionCorrector ?? Utf8BytePositionCorrector;
     this.encodingName = profile?.descriptor?.name ?? 'utf8';
-  }
-
-  /**
-   * Uniform error-position hook (see Encoding/PositionCorrector). O(1) in
-   * all cases — picks between the two counters ByteScanStrategy already
-   * maintains incrementally; CharScanStrategy sources never set
-   * `_positionCorrector` to anything but the no-op since they're already
-   * character-accurate.
-   */
-  correctedPosition() {
-    const col = this._positionCorrector.pick(this.cols, this._charCol);
-    return { line: this.line, col, index: this.startIndex };
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────

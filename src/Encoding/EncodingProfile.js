@@ -1,18 +1,16 @@
-import { createByteScanStrategy, decodeCharAtFixedWidth1, decodeCharAtUtf8, isUtf8ContinuationByte } from './ScanStrategy/ByteScanStrategy.js';
+import { createByteScanStrategy, decodeCharAtFixedWidth1, decodeCharAtUtf8 } from './ScanStrategy/ByteScanStrategy.js';
 import { createCharScanStrategy } from './ScanStrategy/CharScanStrategy.js';
-import { NoOpPositionCorrector, Utf8BytePositionCorrector } from './PositionCorrector/PositionCorrectors.js';
 import { sniff } from './EncodingDetector.js';
 import { defaultEncodingRegistry } from './EncodingRegistry.js';
 
 /**
- * buildProfileForBuffer(bytes, decodingOptions, registry) -> { descriptor, bomLength, scanStrategy, positionCorrector }
+ * buildProfileForBuffer(bytes, decodingOptions, registry) -> { descriptor, bomLength, scanStrategy }
  *
  * The ONE place encoding decisions are made for BufferSource. Called once
  * per parseBytesArr() call, never per-token — every field on the returned
  * object is a concrete, already-resolved strategy, so BufferSource itself
  * never branches on an encoding name again (Dependency Inversion: BufferSource
- * depends on the ScanStrategy/PositionCorrector interfaces, not on "which
- * encoding is this").
+ * depends on the ScanStrategy interface, not on "which encoding is this").
  */
 export function buildProfileForBuffer(bytes, decodingOptions = {}, registry = defaultEncodingRegistry) {
   const requested = decodingOptions.encoding || 'auto';
@@ -29,15 +27,11 @@ export function buildProfileForBuffer(bytes, decodingOptions = {}, registry = de
   const scanStrategy = descriptor.selfSynchronizing
     ? createByteScanStrategy(
         descriptor.name === 'utf8' ? decodeCharAtUtf8 : decodeCharAtFixedWidth1,
-        descriptor.name, // 'utf8'/'ascii'/'latin1' — all valid Buffer#toString() encodings
-        descriptor.name === 'utf8' ? isUtf8ContinuationByte : undefined
+        descriptor.name // 'utf8'/'ascii'/'latin1' — all valid Buffer#toString() encodings
       )
     : createCharScanStrategy();
-  const positionCorrector = descriptor.selfSynchronizing && descriptor.variableWidth
-    ? Utf8BytePositionCorrector
-    : NoOpPositionCorrector;
 
-  return { descriptor, bomLength, scanStrategy, positionCorrector, decodeFirst: !descriptor.selfSynchronizing };
+  return { descriptor, bomLength, scanStrategy, decodeFirst: !descriptor.selfSynchronizing };
 }
 
 /**

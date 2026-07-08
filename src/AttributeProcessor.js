@@ -1,6 +1,6 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
-import { isSpaceCode } from "./util.js"
+import { isSpaceCode, errorPositionOf } from "./util.js"
 
 /**
  * AttributeProcessor — owns all attribute parsing logic.
@@ -171,7 +171,7 @@ export function flushAttributes(parsedAttrs, parser, attrsExpStart, rawAttrMatch
     throw new ParseError(
       `Tag '${tagName}' has ${rawAttrMatchCount} attributes, exceeding limit of ${maxAttrs}`,
       ErrorCode.LIMIT_MAX_ATTRIBUTES,
-      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+      errorPositionOf(parser.source)
     );
   }
 

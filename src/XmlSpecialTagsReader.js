@@ -24,7 +24,7 @@ export function readPiTag(parser) {
     throw new ParseError(
       "Invalid Pi Tag expression.",
       ErrorCode.INVALID_TAG,
-      { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+      errorPositionOf(parser.source)
     )
   } else if (tagExp.tagName === "xml") {
     // Read version from the declaration and store it on the parser for validators.

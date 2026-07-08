@@ -62,7 +62,12 @@ describe("Encoding support", () => {
     expect(result.root).toBe("hi");
   });
 
-  it("reports the same corrected column for equivalent multi-byte vs ASCII content", () => {
+  it("index for multi-byte content reflects raw byte offset (no char correction)", () => {
+    // Position reporting is index-only now, and for BufferSource that index
+    // is a byte offset — "café" (4 chars/5 bytes) and "cafe" (4 chars/4
+    // bytes) are expected to report indices that differ by exactly the
+    // extra byte the accented character takes, not the same corrected
+    // "character column" the old line/col system used to produce.
     const parseAndCatch = (xml) => {
       const parser = new XMLParser();
       try {
@@ -72,16 +77,12 @@ describe("Encoding support", () => {
         return e;
       }
     };
-    // "café" (4 chars/5 bytes) vs "cafe" (4 chars/4 bytes) -- same character
-    // count before the mismatched closing tag. A byte-counted (uncorrected)
-    // column would differ by 1 between these; a character-correct column
-    // must not.
     const withMultiByte = parseAndCatch(`<root>café</wrong></root>`);
     const withAsciiOnly = parseAndCatch(`<root>cafe</wrong></root>`);
     expect(withMultiByte).not.toBeNull();
     expect(withAsciiOnly).not.toBeNull();
     expect(withMultiByte.code).toBe(withAsciiOnly.code);
-    expect(withMultiByte.col).toBe(withAsciiOnly.col);
+    expect(withMultiByte.index).toBe(withAsciiOnly.index + 1);
   });
 
   it("supports a custom-registered encoding via decoding.customDecoders", () => {

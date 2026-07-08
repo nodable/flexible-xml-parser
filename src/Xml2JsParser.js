@@ -48,8 +48,6 @@ function getCachedName(cache, rawName, computeFn) {
 class TagDetail {
   /**
    * @param {string} name  - Tag name
-   * @param {number} line  - 1-based line number where the opening tag's '<' began
-   * @param {number} col   - 1-based column where the opening tag's '<' began
    * @param {number} index - Character offset of '<' from document start
    * @param {number} [openEnd] - Character offset immediately after the opening
    *   tag's closing '>' (i.e. end of `<tag attr="x">`). Undefined until the
@@ -60,10 +58,8 @@ class TagDetail {
    *   literally contain. Used by readClosingTag()'s fast path; undefined for
    *   the synthetic root node.
    */
-  constructor(name, line = 0, col = 0, index = 0, openEnd = undefined, rawName = undefined) {
+  constructor(name, index = 0, openEnd = undefined, rawName = undefined) {
     this.name = name;
-    this.line = line;
-    this.col = col;
     this.index = index;
     this.openEnd = openEnd;
     this.rawName = rawName;
@@ -336,8 +332,6 @@ export default class Xml2JsParser {
         this.source.updateBufferBoundary(consumed);
         const closeMeta = {
           name: current.name,
-          line: tagStart.line,
-          col: tagStart.col,
           index: tagStart.index,
           closeEnd: this.source.startIndex,
         };
@@ -354,8 +348,6 @@ export default class Xml2JsParser {
     // mirrors tagDetail.index / tagDetail.openEnd for the opening-tag side.
     const closeMeta = {
       name: tagName,
-      line: tagStart.line,
-      col: tagStart.col,
       index: tagStart.index,
       closeEnd: this.source.startIndex,
     };
@@ -417,8 +409,6 @@ export default class Xml2JsParser {
     const processedTagName = this.processTagName(tagExp.tagName);
     const tagDetail = new TagDetail(
       processedTagName,
-      tagStart.line,
-      tagStart.col,
       tagStart.index,
       this.source.startIndex, // openEnd: offset right after this opening tag's '>'
       tagExp.tagName, // rawName: exactly as written, for readClosingTag()'s fast path
@@ -444,7 +434,7 @@ export default class Xml2JsParser {
         throw new ParseError(
           `Nesting depth ${depth} exceeds limit of ${maxNested} (tag: '${processedTagName}')`,
           ErrorCode.LIMIT_MAX_NESTED_TAGS,
-          { line: tagDetail.line, col: tagDetail.col, index: tagDetail.index }
+          { index: tagDetail.index }
         );
       }
     }
@@ -509,7 +499,7 @@ export default class Xml2JsParser {
       // closeMeta for a stop node carries only `closeEnd` (offset right after
       // the matched </tagname> was consumed) — StopNodeProcessor scans the
       // closing tag opaquely and doesn't track where '</tagname' itself starts,
-      // so unlike the normal close path we don't have a real index/line/col
+      // so unlike the normal close path we don't have a real index
       // for the close tag's own start, only its end.
       this.outputBuilder.closeElement(this.readonlyMatcher, { name: tagDetail.name, closeEnd: stopEnd.index });
       this.matcher.pop();
@@ -584,7 +574,7 @@ export default class Xml2JsParser {
    * updated together.
    *
    * @param {object} [closeMeta] - Position info for the closing tag:
-   *   { name, line, col, index, closeEnd }. Omitted when there is no real
+   *   { name, index, closeEnd }. Omitted when there is no real
    *   closing tag to report a position for — e.g. AutoCloseHandler synthesizing
    *   a close at EOF, or exitIf closing already-open ancestors. In that case a
    *   minimal `{ name }` is passed to the builder instead of nothing, so
@@ -605,8 +595,6 @@ export default class Xml2JsParser {
   _closeMetaFor(tagDetail) {
     return {
       name: tagDetail.name,
-      line: tagDetail.line,
-      col: tagDetail.col,
       index: tagDetail.index,
       closeEnd: tagDetail.openEnd,
     };

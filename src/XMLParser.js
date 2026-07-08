@@ -311,7 +311,7 @@ export default class XMLParser {
   /**
    * Return structural errors collected during the last parse call.
    * Only populated when autoClose.collectErrors is true.
-   * Each entry: { type, tag, expected, line, col, index }
+   * Each entry: { type, tag, expected, index }
    *
    * @returns {Array}
    */

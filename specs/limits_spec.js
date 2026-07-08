@@ -116,13 +116,12 @@ describe("limits.maxNestedTags — enforcement", function () {
     expect(err.message).toMatch(/n2/);
   });
 
-  it("ParseError should carry position info (line/col)", function () {
+  it("ParseError should carry position info (index)", function () {
     const parser = new XMLParser({ limits: { maxNestedTags: 2 } });
     let err;
     try { parser.parse(nested(3)); } catch (e) { err = e; }
     expect(err instanceof ParseError).toBe(true);
-    expect(typeof err.line).toBe("number");
-    expect(typeof err.col).toBe("number");
+    expect(typeof err.index).toBe("number");
   });
 
   it("should allow limit: 1 (only root tag)", function () {
@@ -148,7 +147,7 @@ describe("limits.maxNestedTags — enforcement", function () {
     // Each sibling resets depth — only deeper nesting should fail
     const parser = new XMLParser({ limits: { maxNestedTags: 2 } });
     const xml = `<root><a><b/></a><c><d/></c></root>`;
-    expect(() => parser.parse(xml)).not.toThrowError("[LIMIT_MAX_NESTED_TAGS] at line 1, col 0: Nesting depth 3 exceeds limit of 2 (tag: 'b')");
+    expect(() => parser.parse(xml)).not.toThrowError("[LIMIT_MAX_NESTED_TAGS] at index 9: Nesting depth 3 exceeds limit of 2 (tag: 'b')");
   });
 
   it("should throw on feed/end (feedable source) when depth exceeded", function () {
@@ -306,18 +305,17 @@ describe("ParseError — general error contract", function () {
   });
 
   it("ParseError should have a meaningful toString()", function () {
-    const e = new ParseError("bad tag", ErrorCode.UNEXPECTED_CLOSE_TAG, { line: 3, col: 7, index: 50 });
+    const e = new ParseError("bad tag", ErrorCode.UNEXPECTED_CLOSE_TAG, { index: 50 });
     const str = e.toString();
     expect(str).toContain("ParseError");
     expect(str).toContain("UNEXPECTED_CLOSE_TAG");
-    expect(str).toContain("line 3");
+    expect(str).toContain("index 50");
     expect(str).toContain("bad tag");
   });
 
   it("ParseError without position still has a useful toString()", function () {
     const e = new ParseError("bad input", ErrorCode.INVALID_INPUT);
-    expect(e.line).toBeUndefined();
-    expect(e.col).toBeUndefined();
+    expect(e.index).toBeUndefined();
     expect(e.toString()).toContain("[INVALID_INPUT]");
     expect(e.toString()).toContain("bad input");
   });
@@ -328,8 +326,6 @@ describe("ParseError — general error contract", function () {
     try { parser.parse(nested(3)); } catch (e) { err = e; }
     expect(err instanceof ParseError).toBe(true);
     expect(err.code).toBe(ErrorCode.LIMIT_MAX_NESTED_TAGS);
-    expect(typeof err.line).toBe("number");
-    expect(typeof err.col).toBe("number");
     expect(typeof err.index).toBe("number");
   });
 

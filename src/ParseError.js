@@ -6,8 +6,6 @@
  * position information.
  *
  * @property {string}          code     - Machine-readable error code (e.g. 'UNEXPECTED_CLOSE_TAG')
- * @property {number|undefined} line    - 1-based line number where the error occurred (when available)
- * @property {number|undefined} col     - 1-based column where the error occurred (when available)
  * @property {number|undefined} index   - 0-based character offset from document start (when available)
  */
 export class ParseError extends Error {
@@ -15,8 +13,6 @@ export class ParseError extends Error {
    * @param {string} message       - Human-readable error message
    * @param {string} code          - Machine-readable error code
    * @param {object} [position]    - Optional position info
-   * @param {number} [position.line]
-   * @param {number} [position.col]
    * @param {number} [position.index]
    */
   constructor(message, code, position = {}) {
@@ -24,8 +20,6 @@ export class ParseError extends Error {
     this.name = 'ParseError';
     this.code = code;
 
-    this.line = position.line ?? undefined;
-    this.col = position.col ?? undefined;
     this.index = position.index ?? undefined;
   }
 
@@ -35,9 +29,6 @@ export class ParseError extends Error {
   }
 
   _posStr() {
-    if (this.line !== undefined && this.col !== undefined) {
-      return `line ${this.line}, col ${this.col}`;
-    }
     if (this.index !== undefined) {
       return `index ${this.index}`;
     }

@@ -143,7 +143,7 @@ export class StopNodeProcessor {
    * chunk-boundary `UNEXPECTED_END` can be retried seamlessly.
    *
    * @param {object} source  Any source object with the standard read interface.
-   * @returns {{content: string, end: {index: number, line: number, col: number}}}
+   * @returns {{content: string, end: {index: number}}}
    *   `content` is the raw text between the opening and closing tags.
    *   `end` is the position immediately after the matched closing tag's '>' —
    *   mirrors `TagDetail.openEnd` / closeMeta.closeEnd for the opening-tag side,
@@ -427,11 +427,11 @@ export class StopNodeProcessor {
    * Called by every strategy when the closing tag is confirmed — always
    * right after that '>' has just been consumed from `source`.
    * @param {object} source
-   * @returns {{content: string, end: {index: number, line: number, col: number}}}
+   * @returns {{content: string, end: {index: number}}}
    */
   _finish(source) {
     const result = this._content;
-    const end = { index: source.startIndex, line: source.line, col: source.cols };
+    const end = { index: source.startIndex };
     this._active = false;
     this._content = '';
     this._depth = 1;

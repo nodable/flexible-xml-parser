@@ -153,8 +153,6 @@ describe('autoClose — collectErrors / getParseErrors()', function () {
     const err = errors[0];
     expect(err.type).toBe('unclosed-eof');
     expect(err.tag).toBe('a');
-    expect(typeof err.line).toBe('number');
-    expect(typeof err.col).toBe('number');
     expect(typeof err.index).toBe('number');
   });
 

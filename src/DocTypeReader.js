@@ -1,5 +1,5 @@
 import { ParseError, ErrorCode } from './ParseError.js';
-import { expectMatch, ensureCanRead } from './util.js';
+import { expectMatch, ensureCanRead, errorPositionOf } from './util.js';
 
 export function readDocType(parser) {
     parser.source.markTokenStart(1);
@@ -33,20 +33,20 @@ export function readDocType(parser) {
                 if (!parser.source.canRead()) {
                     throw new ParseError(`Unexpected end of source reading DOCTYPE sub-tag`,
                         ErrorCode.UNEXPECTED_END,
-                        { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex });
+                        errorPositionOf(parser.source));
                 }
                 let bang = parser.source.readStr(1);
                 parser.source.updateBufferBoundary(1);
                 if (bang !== "!") throw new ParseError(
                     `Invalid DOCTYPE body tag starting with "<${bang}"`,
                     ErrorCode.INVALID_TAG,
-                    { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+                    errorPositionOf(parser.source)
                 );
 
                 if (!parser.source.canRead()) {
                     throw new ParseError(`Unexpected end of source reading DOCTYPE sub-tag type`,
                         ErrorCode.UNEXPECTED_END,
-                        { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex });
+                        errorPositionOf(parser.source));
                 }
                 let typeChar = parser.source.readStr(1);
                 parser.source.updateBufferBoundary(1);
@@ -56,14 +56,14 @@ export function readDocType(parser) {
                     if (!parser.source.canRead()) {
                         throw new ParseError(`Unexpected end of source reading DOCTYPE comment`,
                             ErrorCode.UNEXPECTED_END,
-                            { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex });
+                            errorPositionOf(parser.source));
                     }
                     let dash2 = parser.source.readStr(1);
                     parser.source.updateBufferBoundary(1);
                     if (dash2 !== "-") throw new ParseError(
                         "Invalid comment in DOCTYPE",
                         ErrorCode.INVALID_TAG,
-                        { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+                        errorPositionOf(parser.source)
                     );
                     parser.source.readUpto("-->");
 
@@ -72,7 +72,7 @@ export function readDocType(parser) {
                     if (!parser.source.canRead()) {
                         throw new ParseError(`Unexpected end of source reading DOCTYPE E-type sub-tag`,
                             ErrorCode.UNEXPECTED_END,
-                            { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex });
+                            errorPositionOf(parser.source));
                     }
                     let typeChar2 = parser.source.readStr(1);
                     parser.source.updateBufferBoundary(1);
@@ -89,7 +89,7 @@ export function readDocType(parser) {
                                 throw new ParseError(
                                     `Entity count (${entityCount + 1}) exceeds maximum allowed (${ep.maxEntityCount})`,
                                     ErrorCode.ENTITY_MAX_COUNT,
-                                    { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+                                    errorPositionOf(parser.source)
                                 );
                             }
                             const escaped = entityName.replace(/[.\-+*:]/g, '\\$&');
@@ -109,7 +109,7 @@ export function readDocType(parser) {
                         throw new ParseError(
                             `Invalid DOCTYPE sub-tag "<!E${typeChar2}"`,
                             ErrorCode.INVALID_TAG,
-                            { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+                            errorPositionOf(parser.source)
                         );
                     }
 
@@ -127,7 +127,7 @@ export function readDocType(parser) {
                     throw new ParseError(
                         `Invalid DOCTYPE sub-tag "<!${typeChar}"`,
                         ErrorCode.INVALID_TAG,
-                        { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+                        errorPositionOf(parser.source)
                     );
                 }
 
@@ -162,7 +162,7 @@ export function readDocType(parser) {
     throw new ParseError(
         "Unclosed DOCTYPE",
         ErrorCode.UNEXPECTED_END,
-        { line: parser.source.line, col: parser.source.cols, index: parser.source.startIndex }
+        errorPositionOf(parser.source)
     );
 }
 
@@ -205,7 +205,7 @@ function readEntityExp(parser) {
     if (!source.canRead()) {
         throw new ParseError(`Unexpected end of source after entity name "${entityName}"`,
             ErrorCode.UNEXPECTED_END,
-            { line: source.line, col: source.cols, index: source.startIndex });
+            errorPositionOf(source));
     }
 
     // SYSTEM check requires 6 chars; only peek when they are available
@@ -213,21 +213,21 @@ function readEntityExp(parser) {
         if (source.matchAhead("system", true) === true) {
             throw new ParseError("External entities are not supported",
                 ErrorCode.INVALID_TAG,
-                { line: source.line, col: source.cols, index: source.startIndex });
+                errorPositionOf(source));
         }
     }
 
     if (source.readStr(1) === "%") {
         throw new ParseError("Parameter entities are not supported",
             ErrorCode.INVALID_TAG,
-            { line: source.line, col: source.cols, index: source.startIndex });
+            errorPositionOf(source));
     }
 
     // Need at least the opening quote char
     if (!source.canRead()) {
         throw new ParseError(`Unexpected end of source reading entity value for "${entityName}"`,
             ErrorCode.UNEXPECTED_END,
-            { line: source.line, col: source.cols, index: source.startIndex });
+            errorPositionOf(source));
     }
 
     const [entityValue] = readIdentifierVal(source, "entity");
@@ -237,7 +237,7 @@ function readEntityExp(parser) {
         throw new ParseError(
             `Entity "${entityName}" size (${entityValue.length}) exceeds maximum allowed size (${ep.maxEntitySize})`,
             ErrorCode.ENTITY_MAX_SIZE,
-            { line: source.line, col: source.cols, index: source.startIndex }
+            errorPositionOf(source)
         );
     }
 
@@ -272,7 +272,7 @@ function readElementExp(parser) {
     if (!parser.getNameValidator('name')(elementName)) {
         throw new ParseError(`Invalid element name: "${elementName}"`,
             ErrorCode.INVALID_TAG,
-            { line: source.line, col: source.cols, index: source.startIndex });
+            errorPositionOf(source));
     }
 
     skipSourceWhitespace(source);
@@ -359,7 +359,7 @@ function readNotationExp(parser) {
         throw new ParseError(
             `Expected SYSTEM or PUBLIC in NOTATION, found "${source.readStr(6)}"`,
             ErrorCode.INVALID_TAG,
-            { line: source.line, col: source.cols, index: source.startIndex }
+            errorPositionOf(source)
         );
     }
 
@@ -378,7 +378,7 @@ function readIdentifierVal(source, type) {
         throw new ParseError(
             `Expected quoted string for ${type}, found "${startChar}"`,
             ErrorCode.INVALID_TAG,
-            { line: source.line, col: source.cols, index: source.startIndex }
+            errorPositionOf(source)
         );
     }
     source.updateBufferBoundary(1);
