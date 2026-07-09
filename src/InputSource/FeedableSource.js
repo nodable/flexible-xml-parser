@@ -1,5 +1,5 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
-import { isSpace } from '../util.js';
+import { isSpace, QUOTE_PAIRS_CAPACITY } from '../util.js';
 import { StringDecoder } from 'node:string_decoder';
 import { sniff } from '../Encoding/EncodingDetector.js';
 
@@ -117,6 +117,14 @@ export default class FeedableSource {
      * callers never pay for it.
      */
     this._decoder = null;
+
+    // Reused across every scanTagExpEnd() call, never reallocated. See
+    // StringSource.js's copy of this field for the full doc (fixed-capacity
+    // typed array + manual length, not push()). Safe across a
+    // chunk-boundary rewind: the failed scan's contents are irrelevant the
+    // moment the tag is re-scanned from scratch on the next feed().
+    this._quotePairs = new Int32Array(QUOTE_PAIRS_CAPACITY);
+    this._quotePairsLen = 0;
   }
 
   /**
@@ -347,26 +355,45 @@ export default class FeedableSource {
    * charCodeAt. Bracket access matches what the pre-existing readChAt()
    * already safely used.
    *
+   * Also records quoted-attribute-value positions into `_quotePairs` as it
+   * goes — see StringSource.js's copy of this method for the full doc on
+   * why AttributeProcessor.parseAttributes() can safely reuse them. On a
+   * chunk-boundary retry (UNEXPECTED_END thrown, source rewound), the tag is
+   * always re-scanned from `<` on the next feed(), so a partial/discarded
+   * scan's pairs are simply overwritten — never read in a stale state.
+   *
+   * @param {boolean} [collectQuotes=true] - see StringSource.js's copy.
    * @returns {number} relative offset of the unquoted '>', or -1 if the
    *   buffer runs out first — caller treats that as UNEXPECTED_END, the
    *   normal retryable chunk-boundary signal for this source.
    */
-  scanTagExpEnd() {
+  scanTagExpEnd(collectQuotes = true) {
     const buf = this.buffer;
     const len = buf.length;
     const start = this.startIndex;
+    const pairs = this._quotePairs;
+    const capacity = pairs.length;
+    let pairsLen = 0;
     let inSingle = false;
     let inDouble = false;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
-        if (!inDouble) inSingle = !inSingle;
+        if (!inDouble) {
+          inSingle = !inSingle;
+          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+        }
       } else if (c === '"') {
-        if (!inSingle) inDouble = !inDouble;
+        if (!inSingle) {
+          inDouble = !inDouble;
+          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+        }
       } else if (c === '>' && !inSingle && !inDouble) {
+        this._quotePairsLen = pairsLen;
         return i - start;
       }
     }
+    this._quotePairsLen = pairsLen;
     return -1;
   }
 

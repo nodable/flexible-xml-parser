@@ -1,5 +1,6 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
 import { createByteScanStrategy, decodeCharAtUtf8 } from '../Encoding/ScanStrategy/ByteScanStrategy.js';
+import { QUOTE_PAIRS_CAPACITY } from '../util.js';
 
 const Constants = {
   space: 32,
@@ -70,11 +71,22 @@ export default class BufferSource {
     // Token-start checkpoint for mark/rewind (mirrors FeedableSource API).
     this._tokenStart = -1;
 
+    // Reused across every scanTagExpEnd() call, never reallocated. See
+    // StringSource.js's copy of this field for the full doc. Populated by
+    // whichever ScanStrategy (byte or char) is assigned below.
+    this._quotePairs = new Int32Array(QUOTE_PAIRS_CAPACITY);
+    this._quotePairsLen = 0;
+
     // Resolve once, dispatch polymorphically from here on — no encoding
     // branching anywhere else in this class. See EncodingProfile.js.
     const strategy = profile?.scanStrategy ?? DEFAULT_SCAN_STRATEGY;
     Object.assign(this, strategy);
     this.encodingName = profile?.descriptor?.name ?? 'utf8';
+    // See EncodingProfile.js's buildProfileForBuffer() doc — false only for
+    // ByteScanStrategy+utf8, where a raw byte offset can land mid-character
+    // once decoded. DEFAULT_SCAN_STRATEGY (used when no profile is supplied)
+    // is itself utf8 byte-scan, so the no-profile default must also be false.
+    this._quotePairsUsable = profile ? profile.quotePairsUsable !== false : false;
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
-import { isSpace } from '../util.js';
+import { isSpace, QUOTE_PAIRS_CAPACITY } from '../util.js';
 
 /**
  * StringSource — input source backed by an in-memory string.
@@ -49,6 +49,17 @@ export default class StringSource {
     // -1 means "not set" for that level.
     this._marks = [-1, -1];
 
+    // Reused across every scanTagExpEnd() call, never reallocated. Holds
+    // flat [openIdx, closeIdx, ...] pairs of quoted-attribute-value
+    // positions found while scanning for the tag's closing '>'. Fixed-size
+    // typed array + a manually-tracked length (`_quotePairsLen`), NOT
+    // Array.push() — push() was measured to cost more than the per-character
+    // quote re-scan it was meant to replace (bounds/growth checks on every
+    // call add up across thousands of tags). Plain indexed writes with a
+    // local counter avoid that entirely. See scanTagExpEnd() doc for the
+    // capacity rationale and overflow behaviour.
+    this._quotePairs = new Int32Array(QUOTE_PAIRS_CAPACITY);
+    this._quotePairsLen = 0;
   }
 
   // ─── Token-start checkpoint ───────────────────────────────────────────────
@@ -163,25 +174,46 @@ export default class StringSource {
    * copy of this method for why that matters there; kept identical here
    * for consistency even though StringSource's buffer is never re-concatenated).
    *
+   * While walking the expression it also records where each quoted
+   * attribute value starts/ends (see `_quotePairs` doc below) — the
+   * attribute reader (AttributeProcessor.parseAttributes) reuses these
+   * instead of re-scanning for quotes itself. Recording costs nothing extra
+   * here since every character is already being looked at.
+   *
+   * @param {boolean} [collectQuotes=true] - when false, skip populating
+   *   `_quotePairs` (still resets `_quotePairsLen` to 0). Callers pass false
+   *   when `skip.attributes` is set, since nobody will read it in that case
+   *   — avoids the bookkeeping for nothing.
    * @returns {number} relative offset (from startIndex) of the unquoted '>',
    *   or -1 if the buffer is exhausted first (malformed input for StringSource).
    */
-  scanTagExpEnd() {
+  scanTagExpEnd(collectQuotes = true) {
     const buf = this.buffer;
     const len = buf.length;
     const start = this.startIndex;
+    const pairs = this._quotePairs;
+    const capacity = pairs.length;
+    let pairsLen = 0;
     let inSingle = false;
     let inDouble = false;
     for (let i = start; i < len; i++) {
       const c = buf[i];
       if (c === "'") {
-        if (!inDouble) inSingle = !inSingle;
+        if (!inDouble) {
+          inSingle = !inSingle;
+          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+        }
       } else if (c === '"') {
-        if (!inSingle) inDouble = !inDouble;
+        if (!inSingle) {
+          inDouble = !inDouble;
+          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+        }
       } else if (c === '>' && !inSingle && !inDouble) {
+        this._quotePairsLen = pairsLen;
         return i - start;
       }
     }
+    this._quotePairsLen = pairsLen;
     return -1;
   }
 

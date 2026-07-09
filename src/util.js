@@ -58,6 +58,16 @@ export const DANGEROUS_PROPERTY_NAMES = [
 
 export const criticalProperties = ["__proto__", "constructor", "prototype"];
 
+// Capacity (in numbers, i.e. QUOTE_PAIRS_CAPACITY/2 quoted-attribute-values)
+// of the reusable typed array each InputSource uses to record quote
+// positions found by scanTagExpEnd(), reused by
+// AttributeProcessor.parseAttributes(). A plain fixed cap, not a growable
+// array — see scanTagExpEnd()'s doc for why: comfortably covers real-world
+// tags, and a tag with more quoted attributes than this just falls back to
+// per-character quote scanning for the overflow, so there's no correctness
+// cost to keeping this small and allocation-free.
+export const QUOTE_PAIRS_CAPACITY = 128; // 64 quoted attribute values per tag
+
 /**
  * Uniform error-position accessor across all InputSource types.
  *

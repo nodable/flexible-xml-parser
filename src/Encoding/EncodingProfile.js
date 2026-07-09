@@ -31,7 +31,22 @@ export function buildProfileForBuffer(bytes, decodingOptions = {}, registry = de
       )
     : createCharScanStrategy();
 
-  return { descriptor, bomLength, scanStrategy, decodeFirst: !descriptor.selfSynchronizing };
+  // scanTagExpEnd() records quote positions as offsets into the *raw
+  // buffer* it's scanning. AttributeProcessor.parseAttributes() wants to
+  // reuse those offsets directly as indices into the *decoded* attrStr
+  // string it receives from readStr(). Those two only line up when one
+  // buffer unit == one decoded character:
+  //   - CharScanStrategy: always safe — it scans the already-decoded string,
+  //     same string readStr() hands back.
+  //   - ByteScanStrategy + fixed-width decode (ascii/latin1, and any custom
+  //     self-synchronizing single-byte encoding): safe — 1 byte == 1 char.
+  //   - ByteScanStrategy + utf8: NOT safe — non-ASCII characters are 2-4
+  //     bytes each, so a byte offset recorded mid-scan can land in the
+  //     middle of a character once decoded. AttributeProcessor falls back to
+  //     its own quote scan in this case (see `quotePairsUsable`).
+  const quotePairsUsable = !descriptor.selfSynchronizing || descriptor.name !== 'utf8';
+
+  return { descriptor, bomLength, scanStrategy, decodeFirst: !descriptor.selfSynchronizing, quotePairsUsable };
 }
 
 /**

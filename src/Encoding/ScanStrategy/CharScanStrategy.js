@@ -44,20 +44,43 @@ export function createCharScanStrategy() {
       return true;
     },
 
-    scanTagExpEnd() {
+    /**
+     * Also records quoted-attribute-value positions into `_quotePairs`.
+     * Always character-indexed here (this strategy scans an already-decoded
+     * string), so — unlike ByteScanStrategy+utf8 — these are always safe
+     * for AttributeProcessor to reuse directly. See StringSource.js for the
+     * full doc, including why this uses a fixed-capacity typed array +
+     * manual length instead of push().
+     *
+     * @param {boolean} [collectQuotes=true]
+     */
+    scanTagExpEnd(collectQuotes = true) {
       const buf = this.buffer;
       const len = buf.length;
       const start = this.startIndex;
+      const pairs = this._quotePairs;
+      const capacity = pairs.length;
+      let pairsLen = 0;
       let inSingle = false;
       let inDouble = false;
       for (let i = start; i < len; i++) {
         const c = buf[i];
-        if (c === "'") { if (!inDouble) inSingle = !inSingle; }
-        else if (c === '"') { if (!inSingle) inDouble = !inDouble; }
-        else if (c === '>' && !inSingle && !inDouble) {
+        if (c === "'") {
+          if (!inDouble) {
+            inSingle = !inSingle;
+            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+          }
+        } else if (c === '"') {
+          if (!inSingle) {
+            inDouble = !inDouble;
+            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+          }
+        } else if (c === '>' && !inSingle && !inDouble) {
+          this._quotePairsLen = pairsLen;
           return i - start;
         }
       }
+      this._quotePairsLen = pairsLen;
       return -1;
     },
 

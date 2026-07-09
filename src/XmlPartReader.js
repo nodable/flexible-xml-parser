@@ -90,7 +90,11 @@ export function readTagExp(parser) {
   // attribute's absolute document position from its offset within attrsExp.
   const expStart = parser.source.startIndex;
 
-  const relEnd = parser.source.scanTagExpEnd();
+  // Skip populating the quote-pair list when attributes are being skipped
+  // entirely — nobody will read it, so don't pay to build it (see
+  // scanTagExpEnd()'s `collectQuotes` doc on each source).
+  const collectQuotes = !parser.options.skip.attributes;
+  const relEnd = parser.source.scanTagExpEnd(collectQuotes);
 
   if (relEnd === -1) {
     // Buffer exhausted before an unquoted '>' was found — chunk boundary
@@ -107,7 +111,22 @@ export function readTagExp(parser) {
 
   const exp = parser.source.readStr(relEnd);
   parser.source.updateBufferBoundary(relEnd + 1);
-  return buildTagExpObj(exp, parser, expStart);
+
+  // Quote positions the scan above already found while looking for '>' —
+  // handed to AttributeProcessor so it doesn't re-scan for quotes itself.
+  // Only usable when this source's offsets are guaranteed to line up 1:1
+  // with characters in the decoded `exp` string — false for BufferSource
+  // reading UTF-8, where a byte offset can land mid-character (see
+  // BufferSource._quotePairsUsable doc). Consumed synchronously by
+  // buildTagExpObj below, before any other tag scan can touch the array
+  // again, so no staleness risk. `_quotePairs` is a fixed-capacity reusable
+  // typed array — `_quotePairsLen` says how many of its slots are valid for
+  // this tag (not `_quotePairs.length`, which is always the full capacity).
+  const usableQuotes = collectQuotes && parser.source._quotePairsUsable !== false;
+  const quotePairs = usableQuotes ? parser.source._quotePairs : undefined;
+  const quotePairsLen = usableQuotes ? parser.source._quotePairsLen : 0;
+
+  return buildTagExpObj(exp, parser, expStart, false, quotePairs, quotePairsLen);
 }
 
 /**
@@ -173,9 +192,17 @@ export function readPiExp(parser) {
  *   document position (tagExp._attrsExpStart) for addAttribute()'s meta arg.
  *   Optional so callers that don't have/need it can omit it — attribute
  *   position metadata is simply unavailable in that case, not an error.
+ * @param {Array<number>} [quotePairs] - flat [openIdx, closeIdx, ...] list
+ *   from scanTagExpEnd(), offsets relative to `exp`'s start. Passed through
+ *   to collectRawAttributes so parseAttributes() can skip re-scanning for
+ *   quotes. Undefined when unavailable/unsafe for this source or call site
+ *   (readPiExp never supplies one) — collectRawAttributes falls back to its
+ *   own scan in that case.
+ * @param {number} [quotePairsLen=0] - how many entries in `quotePairs` are
+ *   valid (it's a reused fixed-capacity array, not sized to this tag).
  * @returns {{ tagName, selfClosing, rawAttributes, _attrsExp, _attrsExpStart }}
  */
-function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false) {
+function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false, quotePairs = undefined, quotePairsLen = 0) {
   const tagExp = {
     tagName: "",
     selfClosing: false,
@@ -194,12 +221,14 @@ function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false) {
   // Separate tag name from attribute expression
   let attrsExp = "";
   let i = 0;
+  let attrsLocalOffset; // exp-relative offset where attrsExp begins — rebases quotePairs
 
   for (; i < exp.length; i++) {
     const c = exp[i];
     if (isSpace(c)) {
       tagExp.tagName = exp.substring(0, i);
       attrsExp = exp.substring(i + 1);
+      attrsLocalOffset = i + 1;
       if (expStart !== undefined) tagExp._attrsExpStart = expStart + i + 1;
       break;
     }
@@ -216,7 +245,7 @@ function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false) {
   // Pass 1: collect raw attribute values for matcher.updateCurrent().
   // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent().
   if (forceToReadAttrs || !parser.options.skip.attributes && attrsExp.length > 0) {
-    collectRawAttributes(attrsExp, parser, tagExp);
+    collectRawAttributes(attrsExp, parser, tagExp, quotePairs, attrsLocalOffset, quotePairsLen);
   }
   // console.log(tagExp)
   return tagExp;

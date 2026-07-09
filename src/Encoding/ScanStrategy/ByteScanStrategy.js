@@ -63,20 +63,41 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       return true;
     },
 
-    scanTagExpEnd() {
+    /**
+     * Also records quoted-attribute-value positions into `_quotePairs`
+     * (byte offsets, matching this strategy's own offset unit) — see
+     * StringSource.js for the full doc, including why this uses a
+     * fixed-capacity typed array + manual length instead of push().
+     *
+     * @param {boolean} [collectQuotes=true]
+     */
+    scanTagExpEnd(collectQuotes = true) {
       const buf = this.buffer;
       const len = buf.length;
       const start = this.startIndex;
+      const pairs = this._quotePairs;
+      const capacity = pairs.length;
+      let pairsLen = 0;
       let inSingle = false;
       let inDouble = false;
       for (let i = start; i < len; i++) {
         const c = buf[i];
-        if (c === 39) { if (!inDouble) inSingle = !inSingle; }
-        else if (c === 34) { if (!inSingle) inDouble = !inDouble; }
-        else if (c === 62 && !inSingle && !inDouble) {
+        if (c === 39) {
+          if (!inDouble) {
+            inSingle = !inSingle;
+            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+          }
+        } else if (c === 34) {
+          if (!inSingle) {
+            inDouble = !inDouble;
+            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+          }
+        } else if (c === 62 && !inSingle && !inDouble) {
+          this._quotePairsLen = pairsLen;
           return i - start;
         }
       }
+      this._quotePairsLen = pairsLen;
       return -1;
     },
 

@@ -48,12 +48,29 @@ import { isSpaceCode, errorPositionOf } from "./util.js"
  *   IN_VALUE   — inside a quoted value, accumulating until the closing quote
  *
  * @param {string} attrStr
+ * @param {Array<number>} [quotePairs] - flat [openIdx, closeIdx, ...] list from
+ *   scanTagExpEnd(), offsets relative to the *tag expression* (not attrStr).
+ *   When a value's opening quote lines up with the next expected pair, the
+ *   closing quote's position is taken directly instead of re-scanning for
+ *   it — the per-character `!== quote` comparison is skipped entirely for
+ *   that value. Falls back to the old per-character scan (undefined, or a
+ *   mismatch — belt-and-braces, should never trigger given how the pairs
+ *   are produced, but costs nothing to check once per value) so correctness
+ *   never depends on the fast path succeeding.
+ * @param {number} [attrsOffset] - offset of attrStr's first character within
+ *   the coordinate system quotePairs is expressed in — required whenever
+ *   quotePairs is passed.
+ * @param {number} [quotePairsLen=0] - how many entries in `quotePairs` are
+ *   valid — it's a reused fixed-capacity typed array, not sized to this tag,
+ *   so `quotePairs.length` itself is not the right bound to loop against.
  * @returns {Array<{name: string, value: string|undefined, startIndex: number}>}
  */
-function parseAttributes(attrStr) {
+function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0) {
   const results = [];
   const len = attrStr.length;
   let i = 0;
+  const usePairs = quotePairs !== undefined && quotePairsLen > 0;
+  let pairIdx = 0;
 
   while (i < len) {
     // Skip whitespace between attributes
@@ -82,19 +99,41 @@ function parseAttributes(attrStr) {
     // Read quoted value
     const quote = attrStr.charCodeAt(i);
     if (quote === 34 || quote === 39) { // " or '
+      // Fast path: the tag-end scanner already found this exact quote pair
+      // while looking for '>' — reuse its closing-quote position instead of
+      // re-scanning character-by-character for it.
+      let closeLocal = -1;
+      if (usePairs && pairIdx + 1 < quotePairsLen && quotePairs[pairIdx] === i + attrsOffset) {
+        closeLocal = quotePairs[pairIdx + 1] - attrsOffset;
+        pairIdx += 2;
+      }
+
       i++; // skip opening quote
       let value = '';
       let segStart = i;
-      while (i < len && attrStr.charCodeAt(i) !== quote) {
-        const c = attrStr.charCodeAt(i);
-        if (c === 10 || c === 13) { // \n or \r → space per XML §3.3.3
-          value += attrStr.substring(segStart, i) + ' ';
-          segStart = i + 1;
+      if (closeLocal >= 0) {
+        while (i < closeLocal) {
+          const c = attrStr.charCodeAt(i);
+          if (c === 10 || c === 13) { // \n or \r → space per XML §3.3.3
+            value += attrStr.substring(segStart, i) + ' ';
+            segStart = i + 1;
+          }
+          i++;
         }
-        i++;
+        value += attrStr.substring(segStart, i);
+        i++; // skip closing quote
+      } else {
+        while (i < len && attrStr.charCodeAt(i) !== quote) {
+          const c = attrStr.charCodeAt(i);
+          if (c === 10 || c === 13) { // \n or \r → space per XML §3.3.3
+            value += attrStr.substring(segStart, i) + ' ';
+            segStart = i + 1;
+          }
+          i++;
+        }
+        value += attrStr.substring(segStart, i);
+        i++; // skip closing quote
       }
-      value += attrStr.substring(segStart, i);
-      i++; // skip closing quote
       results.push({ name, value, startIndex: nameStart });
     }
   }
@@ -121,11 +160,14 @@ function parseAttributes(attrStr) {
  * @param {string} attrStr      - raw attribute expression substring
  * @param {object} parser       - Xml2JsParser instance (for processAttrName)
  * @param {object} tagExp - tagExp object to populate rawAttributes (Object.create(null))
+ * @param {Array<number>} [quotePairs] - see parseAttributes() doc.
+ * @param {number} [attrsOffset] - see parseAttributes() doc.
+ * @param {number} [quotePairsLen] - see parseAttributes() doc.
  */
-export function collectRawAttributes(attrStr, parser, tagExp) {
+export function collectRawAttributes(attrStr, parser, tagExp, quotePairs, attrsOffset, quotePairsLen) {
   if (!attrStr || attrStr.length === 0) return;
 
-  const matches = parseAttributes(attrStr);
+  const matches = parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen);
   const len = matches.length;
   tagExp._rawAttrMatchCount = len; // total parsed attrs, incl. dropped (xmlns:) ones — for maxAttributesPerTag parity with old behavior
   const parsedAttrs = [];
