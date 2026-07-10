@@ -1,5 +1,6 @@
 import { ParseError, ErrorCode } from '../../ParseError.js';
 import { isSpace } from '../../util.js';
+import { scanTagExpEnd, scanTagExpEndFast } from '../../InputSource/scanTagExpEnd.js';
 
 /**
  * CharScanStrategy — for encodings that are NOT self-synchronizing (UTF-16
@@ -44,45 +45,12 @@ export function createCharScanStrategy() {
       return true;
     },
 
-    /**
-     * Also records quoted-attribute-value positions into `_quotePairs`.
-     * Always character-indexed here (this strategy scans an already-decoded
-     * string), so — unlike ByteScanStrategy+utf8 — these are always safe
-     * for AttributeProcessor to reuse directly. See StringSource.js for the
-     * full doc, including why this uses a fixed-capacity typed array +
-     * manual length instead of push().
-     *
-     * @param {boolean} [collectQuotes=true]
-     */
-    scanTagExpEnd(collectQuotes = true) {
-      const buf = this.buffer;
-      const len = buf.length;
-      const start = this.startIndex;
-      const pairs = this._quotePairs;
-      const capacity = pairs.length;
-      let pairsLen = 0;
-      let inSingle = false;
-      let inDouble = false;
-      for (let i = start; i < len; i++) {
-        const c = buf[i];
-        if (c === "'") {
-          if (!inDouble) {
-            inSingle = !inSingle;
-            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-          }
-        } else if (c === '"') {
-          if (!inSingle) {
-            inDouble = !inDouble;
-            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-          }
-        } else if (c === '>' && !inSingle && !inDouble) {
-          this._quotePairsLen = pairsLen;
-          return i - start;
-        }
-      }
-      this._quotePairsLen = pairsLen;
-      return -1;
-    },
+    // Two variants — caller picks once based on skip.attributes, no flag
+    // evaluated inside the loop. Always character-indexed (scans an already-
+    // decoded string), so quote offsets are always safe for AttributeProcessor
+    // to reuse. See src/InputSource/scanTagExpEnd.js.
+    scanTagExpEnd,
+    scanTagExpEndFast,
 
     readUpto(stopStr) {
       const inputLength = this.buffer.length;

@@ -63,15 +63,11 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
       return true;
     },
 
-    /**
-     * Also records quoted-attribute-value positions into `_quotePairs`
-     * (byte offsets, matching this strategy's own offset unit) — see
-     * StringSource.js for the full doc, including why this uses a
-     * fixed-capacity typed array + manual length instead of push().
-     *
-     * @param {boolean} [collectQuotes=true]
-     */
-    scanTagExpEnd(collectQuotes = true) {
+    // Two variants — caller picks once based on skip.attributes, no flag
+    // evaluated inside the loop. Compares raw byte codes (39=', 34=", 62=>)
+    // rather than characters — safe here because self-synchronizing encodings
+    // guarantee these byte values never appear as continuation bytes.
+    scanTagExpEnd() {
       const buf = this.buffer;
       const len = buf.length;
       const start = this.startIndex;
@@ -85,12 +81,12 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
         if (c === 39) {
           if (!inDouble) {
             inSingle = !inSingle;
-            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+            if (pairsLen < capacity) pairs[pairsLen++] = i - start;
           }
         } else if (c === 34) {
           if (!inSingle) {
             inDouble = !inDouble;
-            if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
+            if (pairsLen < capacity) pairs[pairsLen++] = i - start;
           }
         } else if (c === 62 && !inSingle && !inDouble) {
           this._quotePairsLen = pairsLen;
@@ -98,6 +94,25 @@ export function createByteScanStrategy(decodeCharAt, nodeEncoding = 'utf8', isCo
         }
       }
       this._quotePairsLen = pairsLen;
+      return -1;
+    },
+
+    scanTagExpEndFast() {
+      const buf = this.buffer;
+      const len = buf.length;
+      const start = this.startIndex;
+      let inSingle = false;
+      let inDouble = false;
+      for (let i = start; i < len; i++) {
+        const c = buf[i];
+        if (c === 39) {
+          if (!inDouble) inSingle = !inSingle;
+        } else if (c === 34) {
+          if (!inSingle) inDouble = !inDouble;
+        } else if (c === 62 && !inSingle && !inDouble) {
+          return i - start;
+        }
+      }
       return -1;
     },
 

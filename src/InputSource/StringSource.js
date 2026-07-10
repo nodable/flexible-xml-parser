@@ -1,5 +1,6 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
 import { isSpace, QUOTE_PAIRS_CAPACITY } from '../util.js';
+import { scanTagExpEnd, scanTagExpEndFast } from './scanTagExpEnd.js';
 
 /**
  * StringSource — input source backed by an in-memory string.
@@ -167,55 +168,10 @@ export default class StringSource {
     return true;
   }
 
-  /**
-   * Quote-aware scan, from the current read position, for the unquoted '>'
-   * that ends a tag expression (`<tag attr="...">`). Used by readTagExp().
-   * Direct-buffer, bracket-indexed (not charCodeAt — see FeedableSource's
-   * copy of this method for why that matters there; kept identical here
-   * for consistency even though StringSource's buffer is never re-concatenated).
-   *
-   * While walking the expression it also records where each quoted
-   * attribute value starts/ends (see `_quotePairs` doc below) — the
-   * attribute reader (AttributeProcessor.parseAttributes) reuses these
-   * instead of re-scanning for quotes itself. Recording costs nothing extra
-   * here since every character is already being looked at.
-   *
-   * @param {boolean} [collectQuotes=true] - when false, skip populating
-   *   `_quotePairs` (still resets `_quotePairsLen` to 0). Callers pass false
-   *   when `skip.attributes` is set, since nobody will read it in that case
-   *   — avoids the bookkeeping for nothing.
-   * @returns {number} relative offset (from startIndex) of the unquoted '>',
-   *   or -1 if the buffer is exhausted first (malformed input for StringSource).
-   */
-  scanTagExpEnd(collectQuotes = true) {
-    const buf = this.buffer;
-    const len = buf.length;
-    const start = this.startIndex;
-    const pairs = this._quotePairs;
-    const capacity = pairs.length;
-    let pairsLen = 0;
-    let inSingle = false;
-    let inDouble = false;
-    for (let i = start; i < len; i++) {
-      const c = buf[i];
-      if (c === "'") {
-        if (!inDouble) {
-          inSingle = !inSingle;
-          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-        }
-      } else if (c === '"') {
-        if (!inSingle) {
-          inDouble = !inDouble;
-          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-        }
-      } else if (c === '>' && !inSingle && !inDouble) {
-        this._quotePairsLen = pairsLen;
-        return i - start;
-      }
-    }
-    this._quotePairsLen = pairsLen;
-    return -1;
-  }
+  // Two variants — caller picks once based on skip.attributes, no flag
+  // evaluated inside the loop. See src/InputSource/scanTagExpEnd.js.
+  scanTagExpEnd = scanTagExpEnd;
+  scanTagExpEndFast = scanTagExpEndFast;
 
   readUpto(stopStr) {
     const inputLength = this.buffer.length;

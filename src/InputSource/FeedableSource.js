@@ -1,5 +1,6 @@
 import { ParseError, ErrorCode } from '../ParseError.js';
 import { isSpace, QUOTE_PAIRS_CAPACITY } from '../util.js';
+import { scanTagExpEnd, scanTagExpEndFast } from './scanTagExpEnd.js';
 import { StringDecoder } from 'node:string_decoder';
 import { sniff } from '../Encoding/EncodingDetector.js';
 
@@ -341,61 +342,14 @@ export default class FeedableSource {
     return true;
   }
 
-  /**
-   * Quote-aware scan, from the current read position, for the unquoted '>'
-   * that ends a tag expression. Used by readTagExp() — replaces the old
-   * per-char canRead(i)/readChAt(i) loop, which profiling showed as the
-   * single largest hotspot (~23-26% of parse time).
-   *
-   * IMPORTANT: bracket char access (`buf[i]`), not `charCodeAt(i)`. This
-   * source's buffer is built via repeated `+=` in feed() (a growing V8
-   * ConsString/rope). charCodeAt forces a full rope-flatten on access —
-   * confirmed via a crash (Runtime_StringCharCodeAt -> String::SlowFlatten)
-   * causing real O(n^2) memory growth when this was first written with
-   * charCodeAt. Bracket access matches what the pre-existing readChAt()
-   * already safely used.
-   *
-   * Also records quoted-attribute-value positions into `_quotePairs` as it
-   * goes — see StringSource.js's copy of this method for the full doc on
-   * why AttributeProcessor.parseAttributes() can safely reuse them. On a
-   * chunk-boundary retry (UNEXPECTED_END thrown, source rewound), the tag is
-   * always re-scanned from `<` on the next feed(), so a partial/discarded
-   * scan's pairs are simply overwritten — never read in a stale state.
-   *
-   * @param {boolean} [collectQuotes=true] - see StringSource.js's copy.
-   * @returns {number} relative offset of the unquoted '>', or -1 if the
-   *   buffer runs out first — caller treats that as UNEXPECTED_END, the
-   *   normal retryable chunk-boundary signal for this source.
-   */
-  scanTagExpEnd(collectQuotes = true) {
-    const buf = this.buffer;
-    const len = buf.length;
-    const start = this.startIndex;
-    const pairs = this._quotePairs;
-    const capacity = pairs.length;
-    let pairsLen = 0;
-    let inSingle = false;
-    let inDouble = false;
-    for (let i = start; i < len; i++) {
-      const c = buf[i];
-      if (c === "'") {
-        if (!inDouble) {
-          inSingle = !inSingle;
-          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-        }
-      } else if (c === '"') {
-        if (!inSingle) {
-          inDouble = !inDouble;
-          if (collectQuotes && pairsLen < capacity) pairs[pairsLen++] = i - start;
-        }
-      } else if (c === '>' && !inSingle && !inDouble) {
-        this._quotePairsLen = pairsLen;
-        return i - start;
-      }
-    }
-    this._quotePairsLen = pairsLen;
-    return -1;
-  }
+  // Two variants — caller picks once based on skip.attributes, no flag
+  // evaluated inside the loop. Bracket access (not charCodeAt) is load-bearing
+  // here: this buffer is a V8 ConsString/rope built via repeated +=, and
+  // charCodeAt would force a full flatten on every access (confirmed O(n^2)
+  // memory regression). The shared implementations use bracket access throughout.
+  // See src/InputSource/scanTagExpEnd.js.
+  scanTagExpEnd = scanTagExpEnd;
+  scanTagExpEndFast = scanTagExpEndFast;
 
   /**
    * Read until stop string is found.

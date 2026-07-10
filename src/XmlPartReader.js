@@ -103,11 +103,14 @@ export function readTagExp(parser) {
   // attribute's absolute document position from its offset within attrsExp.
   const expStart = parser.source.startIndex;
 
-  // Skip populating the quote-pair list when attributes are being skipped
-  // entirely — nobody will read it, so don't pay to build it (see
-  // scanTagExpEnd()'s `collectQuotes` doc on each source).
+  // Pick the scan variant once — scanTagExpEnd records quote positions for
+  // AttributeProcessor to reuse; scanTagExpEndFast skips that bookkeeping
+  // entirely when attributes are being skipped (nobody reads _quotePairs).
+  // No flag is passed into the loop; the decision is made here, once.
   const collectQuotes = !parser.options.skip.attributes;
-  const relEnd = parser.source.scanTagExpEnd(collectQuotes);
+  const relEnd = collectQuotes
+    ? parser.source.scanTagExpEnd()
+    : parser.source.scanTagExpEndFast();
 
   if (relEnd === -1) {
     // Buffer exhausted before an unquoted '>' was found — chunk boundary
