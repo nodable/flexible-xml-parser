@@ -7,7 +7,8 @@ export function readDocType(parser) {
     // <!D are already consumed by the caller up to this point
     expectMatch(parser.source, "OCTYPE", "DOCTYPE preamble");
 
-    const entities = Object.create(null);
+    // const entities = Object.create(null);
+    const entities = {};
     let entityCount = 0;
     let hasBody = false;
     let bodyDone = false;

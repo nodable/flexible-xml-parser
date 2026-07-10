@@ -50,7 +50,7 @@
   "dependencies": {
     "@nodable/base-output-builder": "^2.0.0",
     "@nodable/compact-builder": "^2.0.0",
-    "path-expression-matcher": "^1.6.1",
+    "path-expression-matcher": "^1.6.2",
     "xml-naming": "^0.3.0"
   },
   "devDependencies": {

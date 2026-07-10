@@ -5,7 +5,7 @@ function buildDoc(n) {
   for (let i = 0; i < n; i++) {
     s += `<item id="${i}" sku="SKU-${i}" category="cat-${i % 20}" active="true" featured="false" weight="${(i * 1.5).toFixed(2)}">`;
     s += `<name>Item number ${i}</name><desc>Some description text for item ${i} with a bit more content to simulate real text nodes.</desc>`;
-    s += `<script>if (a < b && c > ${i}) { doStuff('${i}'); }</script>`;
+    // s += `<script>if (a < b && c > ${i}) { doStuff('${i}'); }</script>`;
     s += `</item>`;
   }
   s += '</catalog>';
@@ -23,7 +23,7 @@ const options = {
 
   },
   asciiOnlyName: true,
-  tags: { stopNodes: ['..script'] }
+  // tags: { stopNodes: ['..script'] }
 };
 
 function run(label, iterations) {

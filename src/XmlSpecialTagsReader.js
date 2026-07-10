@@ -44,7 +44,8 @@ export function readPiTag(parser) {
     // cache now that the real version is known; this runs at most once per
     // document (a <?xml?> declaration can only appear once), so the cost is
     // negligible.
-    parser._nameValidators = Object.create(null);
+    // parser._nameValidators = Object.create(null);
+    parser._nameValidators = {};
   }
 
   // Flush attributes into the output builder's this.attributes accumulator

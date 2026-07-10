@@ -162,7 +162,7 @@ export const defaultOptions = {
   // No error is thrown.
   //
   // Default: null (feature disabled)
-  exitIf: null,
+  exitIf: () => false,
 
   //onStopNode(tagDetail, rawContent, matcher)
   // --- output ---

@@ -159,7 +159,7 @@ function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0) {
  *
  * @param {string} attrStr      - raw attribute expression substring
  * @param {object} parser       - Xml2JsParser instance (for processAttrName)
- * @param {object} tagExp - tagExp object to populate rawAttributes (Object.create(null))
+ * @param {object} tagExp - tagExp object to populate rawAttributes
  * @param {Array<number>} [quotePairs] - see parseAttributes() doc.
  * @param {number} [attrsOffset] - see parseAttributes() doc.
  * @param {number} [quotePairsLen] - see parseAttributes() doc.

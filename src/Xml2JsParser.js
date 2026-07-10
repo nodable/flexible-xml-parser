@@ -21,7 +21,7 @@ import { createValidator } from 'xml-naming';
 // meaningfully. On overflow the whole map is cleared rather than evicting
 // individual entries (LRU) — simpler, and this ceiling is rare in practice.
 const NAME_CACHE_LIMIT = 2000;
-
+const keepSpace = { keep: ["xml:space"] }
 /**
  * Returns the cached result of computeFn(rawName) if present, otherwise
  * calls computeFn(), caches the result, and returns it.
@@ -90,11 +90,15 @@ export default class Xml2JsParser {
     // Each Expression carries its config ({ nested, skipEnclosures }) in .data.
     // findMatch() returns the matched Expression directly — O(1) indexed lookup.
     this.stopNodeExpressionsSet = this.options.tags.stopNodesSet ?? new ExpressionSet();
+    if (this.stopNodeExpressionsSet.size === 0) this.isStopNode = () => false;
+    else this.isStopNode = isStopNode;
     this.skipTagExpressionsSet = this.options.skip.tagsSet ?? new ExpressionSet();
+    if (this.skipTagExpressionsSet.size === 0) this.isSkipTag = () => false;
+    else this.isSkipTag = isSkipTag;
 
     // exitIf: optional predicate called after each opening tag is pushed.
     // Stored directly — it's a plain function, not an ExpressionSet.
-    this._exitIf = typeof options.exitIf === 'function' ? options.exitIf : null;
+    this._exitIf = typeof options.exitIf === 'function' ? options.exitIf : () => false;
 
     // Tag/attribute name cache — read from `options`, not created fresh here.
     // `XMLParser` creates a brand-new Xml2JsParser on every parse() call but
@@ -120,7 +124,8 @@ export default class Xml2JsParser {
     // document/session, see XMLParser._createParser / feed() call sites) so
     // a reused Xml2JsParser instance never validates against a stale
     // xmlVersion or leaks one document's name cache into the next.
-    this._nameValidators = Object.create(null);
+    // this._nameValidators = Object.create(null);
+    this._nameValidators = {};
     // Validity (unlike sanitize/ns-resolution in this._nameCache) depends on
     // xmlVersion, which is itself document-scoped — reset alongside
     // _nameValidators for the same reason, not on `options` with the rest of
@@ -448,7 +453,7 @@ export default class Xml2JsParser {
     }
 
     if (raeAttrLen > 0) {
-      this.matcher.push(matcherTagName, rawAttributes, tagNamespace, { keep: ["xml:space"] });
+      this.matcher.push(matcherTagName, rawAttributes, tagNamespace, keepSpace);
       // this.matcher.updateCurrent(rawAttributes);
     } else {
       this.matcher.push(matcherTagName, {}, tagNamespace);
@@ -519,7 +524,7 @@ export default class Xml2JsParser {
       this.matcher.pop();
       this._stopNodeProcessor = null;
       this._stopNodeProcessorMeta = null;
-    } else if (this._exitIf && this._exitIf(this.readonlyMatcher)) {
+    } else if (this._exitIf(this.readonlyMatcher)) {
       // ── exitIf ───────────────────────────────────────────────────────────────
       // Checked BEFORE addElement so the triggering tag is never added to the
       // output builder. The matcher is already positioned (push + updateCurrent
@@ -720,31 +725,9 @@ export default class Xml2JsParser {
   }
 
   /**
-   * Returns the matched stop-node config `{ nested, skipEnclosures }` (from Expression.data)
-   * if the current matcher position matches any stop-node expression, or `null` if not.
-   * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
-   */
-  isStopNode() {
-    if (this.stopNodeExpressionsSet.size === 0) return null;
-    const matched = this.stopNodeExpressionsSet.findMatch(this.matcher);
-    return matched ? matched.data : null;
-  }
-
-  /**
-   * Returns the matched skip-tag config `{ nested, skipEnclosures }` (from Expression.data)
-   * if the current matcher position matches any skip.tags expression, or `null` if not.
-   * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
-   */
-  isSkipTag() {
-    if (this.skipTagExpressionsSet.size === 0) return null;
-    const matched = this.skipTagExpressionsSet.findMatch(this.matcher);
-    return matched ? matched.data : null;
-  }
-
-  /**
-   * Snapshot of mutable parser state passed to AutoCloseHandler.
-   * Returns a live object — properties read from it reflect current state.
-   */
+ * Snapshot of mutable parser state passed to AutoCloseHandler.
+ * Returns a live object — properties read from it reflect current state.
+ */
   _parserState() {
     const self = this;
     return {
@@ -807,4 +790,26 @@ function isSourceExhaustedError(err) {
     err.message.startsWith('Unexpected end of source') ||
     err.message.startsWith('Unexpected closing of source')
   );
+}
+
+/**
+   * Returns the matched stop-node config `{ nested, skipEnclosures }` (from Expression.data)
+   * if the current matcher position matches any stop-node expression, or `null` if not.
+   * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
+   */
+function isStopNode() {
+  if (this.stopNodeExpressionsSet.size === 0) return null;
+  const matched = this.stopNodeExpressionsSet.findMatch(this.matcher);
+  return matched ? matched.data : null;
+}
+
+/**
+ * Returns the matched skip-tag config `{ nested, skipEnclosures }` (from Expression.data)
+ * if the current matcher position matches any skip.tags expression, or `null` if not.
+ * Uses ExpressionSet.findMatch() for O(1) indexed lookup.
+ */
+function isSkipTag() {
+  if (this.skipTagExpressionsSet.size === 0) return null;
+  const matched = this.skipTagExpressionsSet.findMatch(this.matcher);
+  return matched ? matched.data : null;
 }

@@ -6,6 +6,19 @@ import { isSpace } from "./util.js"
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
 
+export class TagExp {
+  constructor() {
+    this.tagName = "";
+    this.selfClosing = false;
+    // rawAttributes= Object.create(null),
+    this.rawAttributes = {};
+    this._attrsExp = "" // stored for two-pass attribute flushing in readOpeningTag
+    this._attrsExpStart = undefined; // absolute document offset of _attrsExp's first char
+    this._rawAttrMatchCount = 0;
+    this._parsedAttrs = [];
+  }
+}
+
 /**
  * Try to match an upcoming closing tag against the name we already expect
  * (the tag sitting on top of the stack) without reading it into a string
@@ -203,13 +216,7 @@ export function readPiExp(parser) {
  * @returns {{ tagName, selfClosing, rawAttributes, _attrsExp, _attrsExpStart }}
  */
 function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false, quotePairs = undefined, quotePairsLen = 0) {
-  const tagExp = {
-    tagName: "",
-    selfClosing: false,
-    rawAttributes: Object.create(null),
-    _attrsExp: "", // stored for two-pass attribute flushing in readOpeningTag
-    _attrsExpStart: undefined, // absolute document offset of _attrsExp's first char
-  };
+  const tagExp = new TagExp();
 
   const expLen = exp.length;
 
