@@ -324,7 +324,7 @@ declare class ParseError extends Error {
  *
  * Errors thrown when limits are exceeded are always `ParseError` instances
  * with codes `LIMIT_MAX_NESTED_TAGS` or `LIMIT_MAX_ATTRIBUTES` respectively,
- * and carry `line`, `col`, and `index` position information.
+ * and carry `index` position information.
  */
 interface LimitsOptions {
   /**
@@ -404,6 +404,12 @@ interface FeedableOptions {
    * operations.  Default: 1024 (1 KB)
    */
   flushThreshold?: number;
+
+  /**
+   * Number of pending bytes that triggers an automatic parse pass attempt.
+   * Default: 256 (0.25 KB)
+   */
+  bufferSize?: number;
 }
 
 /**
