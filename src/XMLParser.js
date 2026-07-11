@@ -188,6 +188,7 @@ export default class XMLParser {
     if (didAdvance) {
       // Real progress made — reset threshold normally
       this._pendingBytes = 0;
+      this._batchThreshold = this.options.feedable.bufferSize;
     } else {
       // Parser is stuck mid-token — grow the threshold to avoid
       // hammering parseXml() until significantly more data arrives
@@ -210,10 +211,8 @@ export default class XMLParser {
    * Any other ParseError (unclosed quote, mismatched tag, etc.) is a real
    * parse failure and is re-thrown after cleaning up the session.
    *
-   * Returns `this` for chaining.
-   *
    * @param {string|Buffer} data
-   * @returns {XMLParser}
+   * @returns {XMLParser} for chaining
    */
   feed(data) {
     if (!this._isFeeding) {
