@@ -1,3 +1,6 @@
+**1.10.1 (2026-07-14)**
+- fix(#10): Position metadata becomes buffer-relative after auto-flush
+
 **1.10.0 (2026-07-11)**
 - docs: Add `bufferSize` option
 - feat: replace string decoder with custom implementation
