@@ -1,7 +1,7 @@
 import StringSource from './InputSource/StringSource.js';
 import BufferSource from './InputSource/BufferSource.js';
 import { buildProfileForBuffer } from './Encoding/EncodingProfile.js';
-import { errorPositionOf } from './util.js';
+import { errorPositionOf, absolutePosition } from './util.js';
 import { readTagExp, readClosingTagName, flushAttributes, tryMatchClosingTagName } from './XmlPartReader.js';
 import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
@@ -338,7 +338,7 @@ export default class Xml2JsParser {
         const closeMeta = {
           name: current.name,
           index: tagStart.index,
-          closeEnd: this.source.startIndex,
+          closeEnd: absolutePosition(this.source),
         };
         this.addTextNode();
         this.popTag(closeMeta);
@@ -354,7 +354,7 @@ export default class Xml2JsParser {
     const closeMeta = {
       name: tagName,
       index: tagStart.index,
-      closeEnd: this.source.startIndex,
+      closeEnd: absolutePosition(this.source),
     };
 
     if (this.isUnpaired(tagName) || this.isStopNode()) {
@@ -396,7 +396,7 @@ export default class Xml2JsParser {
       readTagExp(this); // re-consume the opening tag from the rewound source
       // openEnd reflects the offset right after this opening tag's '>' — stable
       // across retries since the opening tag is fully re-read every time.
-      tagDetail.openEnd = this.source.startIndex;
+      tagDetail.openEnd = absolutePosition(this.source);
       const { content, end: stopEnd } = this._stopNodeProcessor.collect(this.source);
       if (!isSkip) {
         this.outputBuilder.addElement(tagDetail, this.readonlyMatcher);
@@ -415,7 +415,7 @@ export default class Xml2JsParser {
     const tagDetail = new TagDetail(
       processedTagName,
       tagStart.index,
-      this.source.startIndex, // openEnd: offset right after this opening tag's '>'
+      absolutePosition(this.source), // openEnd: offset right after this opening tag's '>'
       tagExp.tagName, // rawName: exactly as written, for readClosingTag()'s fast path
     );
 

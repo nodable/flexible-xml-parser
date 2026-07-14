@@ -64,6 +64,10 @@ export default class BufferSource {
       this.buffer = decoder.write(this.buffer) + decoder.end();
     }
     this.startIndex = 0;
+    // Running total of bytes/chars trimmed off the front by flush() so far.
+    // See StringSource.js's copy of this field / util.js#absolutePosition —
+    // startIndex alone drifts from the true document offset after any flush.
+    this._baseOffset = 0;
 
     this.autoFlush = options.autoFlush !== false;
     this.flushThreshold = options.flushThreshold ?? 1024;
@@ -133,6 +137,7 @@ export default class BufferSource {
       } else {
         this.startIndex = 0;
       }
+      this._baseOffset += origin;
     }
   }
 }

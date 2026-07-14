@@ -1,5 +1,5 @@
 import { ParseError, ErrorCode } from './ParseError.js';
-import { isSpace, ensureCanRead } from './util.js';
+import { isSpace, ensureCanRead, absolutePosition } from './util.js';
 
 /**
  * Well-known enclosure presets.
@@ -266,7 +266,7 @@ export class StopNodeProcessor {
    */
   _finish(source) {
     const result = this._content;
-    const end = { index: source.startIndex };
+    const end = { index: absolutePosition(source) };
     this._active = false;
     this._content = '';
     this._depth = 1;

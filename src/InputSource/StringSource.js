@@ -41,6 +41,11 @@ export default class StringSource {
     this.buffer = str;
     // Boundary pointer: data before this index has been consumed and may be freed.
     this.startIndex = 0;
+    // Running total of characters trimmed off the front by flush() so far.
+    // startIndex alone is only an offset into the live (post-trim) buffer;
+    // the true document-start-relative position is startIndex + _baseOffset.
+    // See util.js#absolutePosition — the single place that sum is computed.
+    this._baseOffset = 0;
 
     this.autoFlush = options.autoFlush !== false;
     this.flushThreshold = options.flushThreshold ?? 1024;
@@ -120,6 +125,7 @@ export default class StringSource {
         if (this._marks[i] >= 0) this._marks[i] -= origin;
       }
       this.startIndex -= origin;
+      this._baseOffset += origin;
     }
   }
 

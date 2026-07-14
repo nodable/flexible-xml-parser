@@ -69,14 +69,31 @@ export const criticalProperties = ["__proto__", "constructor", "prototype"];
 export const QUOTE_PAIRS_CAPACITY = 128; // 64 quoted attribute values per tag
 
 /**
+ * True document-start-relative offset for a source's current read position.
+ *
+ * `source.startIndex` is only an offset into the source's *live buffer* —
+ * every flush() trims already-consumed characters off the front of that
+ * buffer and rebases startIndex back down, so startIndex alone drifts from
+ * the true document offset the moment a flush has happened. Each source
+ * tracks how much it has trimmed away so far in `_baseOffset` (bumped by the
+ * trimmed amount inside flush()); the real position is always the sum of
+ * the two. This is the one place that sum is computed — every caller that
+ * needs an absolute, document-start-relative position (errors, tag index/
+ * openEnd/closeEnd, attribute offsets, stop-node end) must go through this
+ * function rather than reading `startIndex` directly.
+ */
+export function absolutePosition(source) {
+  return source.startIndex + (source._baseOffset || 0);
+}
+
+/**
  * Uniform error-position accessor across all InputSource types.
  *
  * Position reporting is index-only (absolute offset from document start) —
- * no line/column. Every InputSource exposes `startIndex` the same way, so
- * this is a plain passthrough, not a per-source branch.
+ * no line/column.
  */
 export function errorPositionOf(source) {
-  return { index: source.startIndex };
+  return { index: absolutePosition(source) };
 }
 
 /**

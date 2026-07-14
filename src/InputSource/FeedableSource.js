@@ -64,6 +64,10 @@ export default class FeedableSource {
     this.buffer = '';
     this.startIndex = 0;
     this.isComplete = false;
+    // Running total of characters trimmed off the front by flush() so far.
+    // See StringSource.js's copy of this field / util.js#absolutePosition —
+    // startIndex alone drifts from the true document offset after any flush.
+    this._baseOffset = 0;
 
     this.maxBufferSize = options.maxBufferSize || 10 * 1024 * 1024; // 10 MB
     this.autoFlush = options.autoFlush !== false;            // true by default
@@ -489,6 +493,7 @@ export default class FeedableSource {
       }
 
       this.startIndex -= origin;
+      this._baseOffset += origin;
     }
   }
 }

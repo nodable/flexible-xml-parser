@@ -1,5 +1,6 @@
 import { buildOptions } from './OptionsBuilder.js';
 import { ParseError, ErrorCode } from './ParseError.js';
+import { absolutePosition } from './util.js';
 import Xml2JsParser from './Xml2JsParser.js';
 import FeedableSource from './InputSource/FeedableSource.js';
 import StreamSource from './InputSource/StreamSource.js';
@@ -170,7 +171,7 @@ export default class XMLParser {
   _runParse() {
     if (!this._feedParser) return;
 
-    const beforePos = this._feedSource.startIndex; // bytes consumed so far
+    const beforePos = absolutePosition(this._feedSource); // bytes consumed so far, flush-proof
 
     try {
       this._feedParser.parseXml();
@@ -182,7 +183,7 @@ export default class XMLParser {
       }
     }
 
-    const afterPos = this._feedSource.startIndex;
+    const afterPos = absolutePosition(this._feedSource);
     const didAdvance = afterPos > beforePos;
 
     if (didAdvance) {

@@ -1,4 +1,5 @@
 import { ParseError, ErrorCode } from './ParseError.js';
+import { absolutePosition } from './util.js';
 
 /**
  * AutoCloseHandler
@@ -112,7 +113,7 @@ export default class AutoCloseHandler {
       throw new ParseError(
         `Unexpected closing tag '${closingTagName}' expecting '${currentTagDetail.name}'`,
         ErrorCode.MISMATCHED_CLOSE_TAG,
-        { index: source ? source.startIndex : undefined }
+        { index: source ? absolutePosition(source) : undefined }
       );
     }
 
@@ -120,7 +121,7 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.MISMATCHED_CLOSE, {
         tag: closingTagName,
         expected: currentTagDetail.name,
-        index: source ? source.startIndex : null,
+        index: source ? absolutePosition(source) : null,
       });
       return { action: 'discard' };
     }
@@ -148,7 +149,7 @@ export default class AutoCloseHandler {
       this._recordError(AutoCloseErrorType.PHANTOM_CLOSE, {
         tag: closingTagName,
         expected: currentTagDetail.name,
-        index: source ? source.startIndex : null,
+        index: source ? absolutePosition(source) : null,
       });
       return { action: 'discard' };
     }
@@ -189,7 +190,7 @@ export default class AutoCloseHandler {
     this._recordError(AutoCloseErrorType.PARTIAL_TAG, {
       tag: _extractPartialTagName(originalError),
       expected: null,
-      index: parserState.source ? parserState.source.startIndex : null,
+      index: parserState.source ? absolutePosition(parserState.source) : null,
     });
 
     // Discard any partially-accumulated text from the broken tag

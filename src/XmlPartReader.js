@@ -1,7 +1,7 @@
 'use strict';
 import { ParseError, ErrorCode } from './ParseError.js';
 import { collectRawAttributes } from './AttributeProcessor.js';
-import { isSpace } from "./util.js"
+import { isSpace, absolutePosition } from "./util.js"
 // Re-export flushAttributes so Xml2JsParser and XmlSpecialTagsReader can
 // continue to import it from here without changing their import lines.
 export { flushAttributes } from './AttributeProcessor.js';
@@ -101,7 +101,7 @@ export function readTagExp(parser) {
   // Absolute document offset where `exp` (tag name onward, right after '<')
   // begins — captured before any reads so buildTagExpObj can compute each
   // attribute's absolute document position from its offset within attrsExp.
-  const expStart = parser.source.startIndex;
+  const expStart = absolutePosition(parser.source);
 
   // Pick the scan variant once — scanTagExpEnd records quote positions for
   // AttributeProcessor to reuse; scanTagExpEndFast skips that bookkeeping
@@ -155,7 +155,7 @@ export function readTagExp(parser) {
  */
 export function readPiExp(parser) {
   parser.source.markTokenStart(1);
-  const expStart = parser.source.startIndex;
+  const expStart = absolutePosition(parser.source);
   let inSingleQuotes = false;
   let inDoubleQuotes = false;
   let i;
