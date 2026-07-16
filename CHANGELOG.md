@@ -1,3 +1,6 @@
+**1.11.1 (2026-07-16)**
+- fix: fix for multiple DOCTYPE declarations found.
+
 **1.11.0 (2026-07-16)**
 - fix: previously all attributes without value or unquoted values were being treated as boolean attributes.
 - fix: multiple spaces to single space for `\n` or `\r`
