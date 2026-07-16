@@ -219,9 +219,7 @@ export default class Xml2JsParser {
 
         const nextChar = this.source.readChAt(0);
         if (nextChar === '') throw new ParseError(
-          "Unexpected end of source after '<'",
-          ErrorCode.UNEXPECTED_END,
-          errorPositionOf(this.source)
+          "Unexpected end of source after '<'", ErrorCode.UNEXPECTED_END, errorPositionOf(this.source)
         );
 
         //sorted frequency wise
@@ -284,7 +282,7 @@ export default class Xml2JsParser {
       if (this.autoCloseHandler && hasOpenTags && !hasTrailingText) {
         this.autoCloseHandler.handleEof(this._parserState());
       } else {
-        throw new ParseError('Unexpected data in the end of document', ErrorCode.UNEXPECTED_TRAILING_DATA);
+        throw new ParseError('Unexpected data in the end of document', ErrorCode.UNEXPECTED_TRAILING_DATA, errorPositionOf(this.source));
       }
     }
   }
@@ -701,11 +699,11 @@ export default class Xml2JsParser {
       const options = this.options;
       let attrName = resolveNsPrefix(rawAttrName, options.skip.nsPrefix);
       if (!this.getNameValidator('qName')(attrName)) { //TODO: make it optional
-        throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME);
+        throw new ParseError(`Invalid attribute name: ${attrName}`, ErrorCode.INVALID_ATTRIBUTE_NAME, errorPositionOf(this.source));
       }
-      attrName = sanitizeName(attrName, options.onDangerousProperty, options.sanitizeNames);
+      attrName = sanitizeName(attrName, options.onDangerousProperty, options.sanitizeNames, this.source);
       if (options.strictReservedNames && attrName === options.attributes.groupBy) {
-        throw new ParseError(`Restricted attribute name: ${attrName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
+        throw new ParseError(`Restricted attribute name: ${attrName}`, ErrorCode.SECURITY_RESTRICTED_NAME, errorPositionOf(this.source));
       }
       return attrName;
     });
@@ -716,13 +714,13 @@ export default class Xml2JsParser {
       const options = this.options;
       const nameFor = options.nameFor;
       let tagName = resolveNsPrefix(rawTagName, options.skip.nsPrefix);
-      tagName = sanitizeName(tagName, options.onDangerousProperty, options.sanitizeNames);
+      tagName = sanitizeName(tagName, options.onDangerousProperty, options.sanitizeNames, this.source);
       if (options.strictReservedNames && (
         tagName === nameFor.comment ||
         tagName === nameFor.cdata ||
         tagName === nameFor.text
       )) {
-        throw new ParseError(`Restricted tag name: ${tagName}`, ErrorCode.SECURITY_RESTRICTED_NAME);
+        throw new ParseError(`Restricted tag name: ${tagName}`, ErrorCode.SECURITY_RESTRICTED_NAME, errorPositionOf(this.source));
       }
       return tagName;
     });
@@ -761,20 +759,20 @@ function resolveNsPrefix(name, skipNsPrefix) {
       if (parts[0] === 'xmlns') return false; // drop xmlns declarations
       return parts[1];
     } else if (parts.length > 2) {
-      throw new ParseError(`Multiple namespaces in name: ${name}`, ErrorCode.MULTIPLE_NAMESPACES);
+      throw new ParseError(`Multiple namespaces in name: ${name}`, ErrorCode.MULTIPLE_NAMESPACES, errorPositionOf(this.source));
     }
   }
   return name;
 }
 
-function sanitizeName(name, onDangerousProperty, sanitizeNames) {
+function sanitizeName(name, onDangerousProperty, sanitizeNames, source) {
   // criticalProperties (__proto__, constructor, prototype) guard against an
   // actual prototype-pollution vulnerability in the output object, not just
   // a naming collision — this check always runs, `sanitizeNames` cannot
   // turn it off. Only the DANGEROUS_PROPERTY_NAMES rename step (a milder,
   // cosmetic shadowing concern) is skippable for trusted input.
   if (criticalProperties.includes(name)) {
-    throw new ParseError(`[SECURITY] Invalid name: "${name}" is a reserved JavaScript keyword that could cause prototype pollution`, ErrorCode.SECURITY_PROTOTYPE_POLLUTION);
+    throw new ParseError(`[SECURITY] Invalid name: "${name}" is a reserved JavaScript keyword that could cause prototype pollution`, ErrorCode.SECURITY_PROTOTYPE_POLLUTION, errorPositionOf(source));
   }
   if (sanitizeNames === false) return name;
   if (DANGEROUS_PROPERTY_NAMES.includes(name)) {
