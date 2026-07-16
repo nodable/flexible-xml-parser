@@ -73,7 +73,7 @@ export default class Xml2JsParser {
     this.currentTagDetail = null;
     this.tagTextData = "";
     this.tagsStack = [];
-
+    this.doctypeFound = false;
     this.matcher = new Matcher();
 
     //create once and reuse
@@ -115,6 +115,7 @@ export default class Xml2JsParser {
   initializeParser() {
     this.tagTextData = "";
     this.tagsStack = [];
+    this.doctypeFound = false;
     this._stopNodeProcessor = null;
     this._exitIfTriggered = false;
     // Lazily-built, memoized xml-naming validators (v0.3.0 createValidator).
@@ -618,6 +619,10 @@ export default class Xml2JsParser {
         // DOCTYPE is always read to consume its content and advance the cursor.
         // Entities are forwarded to the output builder only when doctypeOptions.enabled is true.
         const docTypeEntities = readDocType(this);
+        if (this.doctypeFound) {
+          throw new ParseError("Multiple DOCTYPE declarations found.", ErrorCode.INVALID_INPUT, errorPositionOf(this.source));
+        }
+        this.doctypeFound = true;
         if (this.options.doctypeOptions.enabled &&
           docTypeEntities &&
           Object.keys(docTypeEntities).length > 0) {

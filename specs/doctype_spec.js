@@ -350,6 +350,15 @@ describe("Security — maxEntityCount", function () {
     () => makeParser({ enabled: true, maxEntityCount: 0 })
   );
 
+  runAcrossAllInputSourcesWithException(
+    "should throw when multiple DOCTYPE even if not set to read",
+    `<!DOCTYPE root [ <!ENTITY e3 "c"> ]>
+    <!DOCTYPE root [ <!ENTITY e4 "d"> ]>
+    <root>&e1;</root>`,
+    "Multiple DOCTYPE declarations found.",
+    { doctypeOptions: { enabled: true } }
+  );
+
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
