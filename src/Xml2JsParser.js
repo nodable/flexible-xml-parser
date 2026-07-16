@@ -1,7 +1,7 @@
 import StringSource from './InputSource/StringSource.js';
 import BufferSource from './InputSource/BufferSource.js';
 import { buildProfileForBuffer } from './Encoding/EncodingProfile.js';
-import { errorPositionOf, absolutePosition } from './util.js';
+import { errorPositionOf, absolutePosition, sanitizeContent } from './util.js';
 import { readTagExp, readClosingTagName, flushAttributes, tryMatchClosingTagName } from './XmlPartReader.js';
 import { StopNodeProcessor } from './StopNodeProcessor.js';
 import { readComment, readCdata, readPiTag } from './XmlSpecialTagsReader.js';
@@ -631,6 +631,9 @@ export default class Xml2JsParser {
 
   addTextNode() {
     if (this.tagTextData !== undefined && this.tagTextData !== "") {
+      // Line-ending normalization + illegal-control-character rejection,
+      // applied once per complete text run (never mid-chunk — see util.js).
+      this.tagTextData = sanitizeContent(this.tagTextData, this.source);
       // Pass raw text — entity expansion is handled by 'entities' ValueParser in the chain
       if (!this.options.skip.whitespaceText || this.tagTextData.trim().length > 0) {
         this.outputBuilder.addValue(this.tagTextData, this.readonlyMatcher);

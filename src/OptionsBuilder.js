@@ -34,7 +34,15 @@ export const defaultOptions = {
 
   // --- attributes group ---
   attributes: {
-    booleanType: false,  // Allow valueless attributes (treated as boolean true)
+    // 'allow' (default) keeps a valueless attribute (e.g. <e flag/>) as `true`.
+    // 'ignore' drops it silently; 'throw' rejects the document as soon as one
+    // is found. Replaces a previous same-named boolean option that had no
+    // effect on parsing (it was never read anywhere in the parsing code).
+    booleanType: 'allow',
+    // 'overwrite' (default) — last occurrence of a repeated attribute name wins.
+    // 'ignore' — first occurrence wins, later ones are dropped entirely.
+    // 'throw' — reject the document as soon as a repeated name is found on one tag.
+    duplicate: 'overwrite',
     groupBy: '',         // Group all attributes under this key; '' = inline with tag
     prefix: '@_',        // Prepended to attribute names in output
     suffix: '',          // Appended to attribute names in output

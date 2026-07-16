@@ -107,8 +107,20 @@ interface NameForOptions {
 }
 
 interface AttributeOptions {
-  /** Allow boolean (valueless) attributes — treated as `true`. Default: false */
-  booleanType?: boolean;
+  /**
+   * How to handle a valueless (boolean) attribute, e.g. `<e flag/>`.
+   *   'allow'  (default) — keep it, value is `true`
+   *   'ignore'            — drop it silently, rest of the tag is unaffected
+   *   'throw'             — reject the document as soon as one is found
+   */
+  booleanType?: 'allow' | 'ignore' | 'throw';
+  /**
+   * How to handle a repeated attribute name on the same tag, e.g. `<e a="1" a="2"/>`.
+   *   'overwrite' (default) — last occurrence wins
+   *   'ignore'               — first occurrence wins, later ones dropped entirely
+   *   'throw'                — reject the document as soon as a repeat is found
+   */
+  duplicate?: 'overwrite' | 'ignore' | 'throw';
   /** Group all attributes under this property name. Empty string = inline with tag. Default: '' */
   groupBy?: string;
   /** Prefix prepended to attribute names in output. Default: '@_' */

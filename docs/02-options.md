@@ -46,9 +46,13 @@ attributes: {
   prefix:      '@_',
   suffix:      '',
   groupBy:     '',     // group all attributes under this key; '' = inline
-  booleanType: false,  // allow valueless attributes (treated as true)
+  booleanType: "allow",  // allow valueless attributes (treated as true)
+  duplicate:   "overwrite",  // allow repeated attribute names (last one wins)
 }
 ```
+
+- `booleanType`: "allow" | "ignore" | "throw"
+- `duplicate`: "overwrite" | "ignore" | "throw"
 
 Value parsers for attributes are configured on the **output builder**, not here. See [03-value-parsers.md](./03-value-parsers.md).
 

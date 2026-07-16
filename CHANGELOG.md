@@ -1,3 +1,12 @@
+**1.11.0 (2026-07-16)**
+- fix: previously all attributes without value or unquoted values were being treated as boolean attributes.
+- fix: multiple spaces to single space for `\n` or `\r`
+- a literal tab inside an attribute value folds to one space
+- feat: allow/ignore/error when boolean attributes are found.
+- feat: overwrite/ignore/error when duplicate attributes are found.
+- feat: Error on Illegal Control Code
+- feat: Error on Unquoted attribute value
+
 **1.10.1 (2026-07-14)**
 - fix(#10): Position metadata becomes buffer-relative after auto-flush
 

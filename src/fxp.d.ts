@@ -106,8 +106,20 @@ export interface NameForOptions {
 }
 
 export interface AttributeOptions {
-  /** Allow boolean (valueless) attributes — treated as `true`. Default: false */
-  booleanType?: boolean;
+  /**
+   * How to handle a valueless (boolean) attribute, e.g. `<e flag/>`.
+   *   'allow'  (default) — keep it, value is `true`
+   *   'ignore'            — drop it silently, rest of the tag is unaffected
+   *   'throw'             — reject the document as soon as one is found
+   */
+  booleanType?: 'allow' | 'ignore' | 'throw';
+  /**
+   * How to handle a repeated attribute name on the same tag, e.g. `<e a="1" a="2"/>`.
+   *   'overwrite' (default) — last occurrence wins
+   *   'ignore'               — first occurrence wins, later ones dropped entirely
+   *   'throw'                — reject the document as soon as a repeat is found
+   */
+  duplicate?: 'overwrite' | 'ignore' | 'throw';
   /** Group all attributes under this property name. Empty string = inline with tag. Default: '' */
   groupBy?: string;
   /** Prefix prepended to attribute names in output. Default: '@_' */
@@ -247,6 +259,12 @@ export declare const ErrorCode: {
 
   // Namespace
   readonly MULTIPLE_NAMESPACES: 'MULTIPLE_NAMESPACES';
+
+  // Conformance (illegal chars, attribute value rules)
+  readonly ILLEGAL_CHARACTER: 'ILLEGAL_CHARACTER';
+  readonly DUPLICATE_ATTRIBUTE: 'DUPLICATE_ATTRIBUTE';
+  readonly UNQUOTED_ATTRIBUTE_VALUE: 'UNQUOTED_ATTRIBUTE_VALUE';
+  readonly BOOLEAN_ATTRIBUTE_REJECTED: 'BOOLEAN_ATTRIBUTE_REJECTED';
 
   // Security
   readonly SECURITY_PROTOTYPE_POLLUTION: 'SECURITY_PROTOTYPE_POLLUTION';

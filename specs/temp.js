@@ -17,7 +17,7 @@ describe("Temp", function () {
     console.log(result);//{ root: '' }
   });
 
-  fit("should stop at multiple stop nodes with feesable input source", function () {
+  it("should stop at multiple stop nodes with feesable input source", function () {
     const xmlData = `<rootNode abc='\t23' />`;
 
     const parser = new XMLParser({
@@ -47,5 +47,47 @@ describe("Temp", function () {
     const result = parser.end();
     // const result = parser.parse(xmlData);
     console.log(result);//{ root: 'hello' }
+  });
+
+  it("booleanType: false", function () {
+    const xmlData = `<a name=amit gupta></a>`;
+
+    const parser = new XMLParser({
+      attributes: { booleanType: true },
+      skip: { attributes: false }
+    });
+    const result = parser.parse(xmlData);
+    // const result = parser.parse(xmlData);
+    console.log(result);//{ root: 'hello' }
+  });
+
+  fit('uses a custom OutputBuilder', async () => {
+    // Simple builder that just counts tags
+    let counts = 0;
+    const series = [];
+    const CustomBuilder = {
+      getInstance() {
+        return {
+          registeredValParsers: {},
+          addElement(tag) { series.push(tag.name) },
+          closeElement() { series.push("closing") },
+          addValue(text) { series.push(text) },
+          addAttribute() { },
+          addComment() { },
+          addLiteral() { },
+          addDeclaration() { },
+          addInstruction() { },
+          addDocType() { },
+          getOutput() { return counts; },
+        };
+      },
+      registerValueParser() { },
+    };
+
+    const xml = '<root>a<item/>b<item/>c<item/>d</root>';
+    const result = new XMLParser({ OutputBuilder: CustomBuilder })
+      .parse(xml);
+    // expect(result.item).toBe(3);
+    console.log(series)
   });
 });

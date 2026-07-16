@@ -65,7 +65,56 @@ import { isSpaceCode, errorPositionOf } from "./util.js"
  *   so `quotePairs.length` itself is not the right bound to loop against.
  * @returns {Array<{name: string, value: string|undefined, startIndex: number}>}
  */
-function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0) {
+/**
+ * True for character codes illegal as literal content anywhere in the
+ * document (mirrors util.js's isIllegalControlCode — not imported directly
+ * to keep this hot loop free of a cross-module call for a one-line check).
+ */
+function isIllegalAttrCode(c) {
+  return c <= 8 || c === 11 || c === 12 || (c >= 14 && c <= 31);
+}
+
+/**
+ * Scan one quoted attribute value's characters from `i` up to `end`
+ * (exclusive), folding whitespace per XML §3.3.3 and rejecting illegal
+ * control characters. Shared by both the fast path (closing quote position
+ * already known from scanTagExpEnd's quote pairs) and the slow path (closing
+ * quote found by scanning for `quote`) below — same rules either way.
+ *
+ *   - real `\r\n` pair            → exactly one space (not two)
+ *   - lone `\r` or lone `\n`      → one space
+ *   - literal tab (0x09)          → one space (a `&#9;` reference is left
+ *                                    untouched — that's resolved later, by
+ *                                    the entity value-parser, not here)
+ *   - other illegal control code  → throws ILLEGAL_CHARACTER
+ *
+ * @returns {string} the folded value (does not include the closing quote)
+ */
+function scanAttrValue(attrStr, i, end, parser) {
+  let value = '';
+  let segStart = i;
+  for (; i < end; i++) {
+    const c = attrStr.charCodeAt(i);
+    if (c === 13) { // \r — possibly paired with a following \n
+      value += attrStr.substring(segStart, i) + ' ';
+      if (attrStr.charCodeAt(i + 1) === 10) i++;
+      segStart = i + 1;
+    } else if (c === 10 || c === 9) { // lone \n, or literal tab
+      value += attrStr.substring(segStart, i) + ' ';
+      segStart = i + 1;
+    } else if (isIllegalAttrCode(c)) {
+      throw new ParseError(
+        `Illegal control character 0x${c.toString(16).padStart(2, '0')} in attribute value`,
+        ErrorCode.ILLEGAL_CHARACTER,
+        parser ? errorPositionOf(parser.source) : {}
+      );
+    }
+  }
+  value += attrStr.substring(segStart, i);
+  return value;
+}
+
+function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0, parser) {
   const results = [];
   const len = attrStr.length;
   let i = 0;
@@ -96,46 +145,38 @@ function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0) {
     // Skip whitespace after '='
     while (i < len && isSpaceCode(attrStr.charCodeAt(i))) i++;
 
-    // Read quoted value
-    const quote = attrStr.charCodeAt(i);
-    if (quote === 34 || quote === 39) { // " or '
-      // Fast path: the tag-end scanner already found this exact quote pair
-      // while looking for '>' — reuse its closing-quote position instead of
-      // re-scanning character-by-character for it.
-      let closeLocal = -1;
-      if (usePairs && pairIdx + 1 < quotePairsLen && quotePairs[pairIdx] === i + attrsOffset) {
-        closeLocal = quotePairs[pairIdx + 1] - attrsOffset;
-        pairIdx += 2;
-      }
-
-      i++; // skip opening quote
-      let value = '';
-      let segStart = i;
-      if (closeLocal >= 0) {
-        while (i < closeLocal) {
-          const c = attrStr.charCodeAt(i);
-          if (c === 10 || c === 13) { // \n or \r → space per XML §3.3.3
-            value += attrStr.substring(segStart, i) + ' ';
-            segStart = i + 1;
-          }
-          i++;
-        }
-        value += attrStr.substring(segStart, i);
-        i++; // skip closing quote
-      } else {
-        while (i < len && attrStr.charCodeAt(i) !== quote) {
-          const c = attrStr.charCodeAt(i);
-          if (c === 10 || c === 13) { // \n or \r → space per XML §3.3.3
-            value += attrStr.substring(segStart, i) + ' ';
-            segStart = i + 1;
-          }
-          i++;
-        }
-        value += attrStr.substring(segStart, i);
-        i++; // skip closing quote
-      }
-      results.push({ name, value, startIndex: nameStart });
+    // The character right after '=' (mod whitespace) MUST be a quote — this
+    // is never relaxed, in any mode. Reject before consuming anything, so an
+    // unquoted value never partially reaches the output builder.
+    const quote = attrStr.charCodeAt(i); // NaN when i >= len — also fails both checks below
+    if (quote !== 34 && quote !== 39) { // not " or '
+      throw new ParseError(
+        `Attribute '${name}' has an unquoted value — attribute values must be wrapped in '"' or "'"`,
+        ErrorCode.UNQUOTED_ATTRIBUTE_VALUE,
+        parser ? errorPositionOf(parser.source) : {}
+      );
     }
+
+    // Fast path: the tag-end scanner already found this exact quote pair
+    // while looking for '>' — reuse its closing-quote position instead of
+    // re-scanning character-by-character for it.
+    let closeLocal = -1;
+    if (usePairs && pairIdx + 1 < quotePairsLen && quotePairs[pairIdx] === i + attrsOffset) {
+      closeLocal = quotePairs[pairIdx + 1] - attrsOffset;
+      pairIdx += 2;
+    }
+
+    i++; // skip opening quote
+    let end;
+    if (closeLocal >= 0) {
+      end = closeLocal;
+    } else {
+      end = i;
+      while (end < len && attrStr.charCodeAt(end) !== quote) end++;
+    }
+    const value = scanAttrValue(attrStr, i, end, parser);
+    i = end + 1; // skip closing quote
+    results.push({ name, value, startIndex: nameStart });
   }
 
   return results;
@@ -167,17 +208,53 @@ function parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen = 0) {
 export function collectRawAttributes(attrStr, parser, tagExp, quotePairs, attrsOffset, quotePairsLen) {
   if (!attrStr || attrStr.length === 0) return;
 
-  const matches = parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen);
+  const matches = parseAttributes(attrStr, quotePairs, attrsOffset, quotePairsLen, parser);
   const len = matches.length;
   tagExp._rawAttrMatchCount = len; // total parsed attrs, incl. dropped (xmlns:) ones — for maxAttributesPerTag parity with old behavior
   const parsedAttrs = [];
   let count = 0;
+
+  // attributes.duplicate: 'overwrite' (default) needs no bookkeeping — last
+  // occurrence naturally wins via the rawAttributes object-assign + the
+  // builder's own last-write-wins addAttribute() calls below, exactly as
+  // before this option existed. 'ignore'/'throw' need to track names seen
+  // so far on *this* tag only — a fresh Set per call, never shared across tags.
+  const dupMode = parser.options.attributes?.duplicate || 'overwrite';
+  const seen = dupMode !== 'overwrite' ? new Set() : null;
+  const boolMode = parser.options.attributes?.booleanType || 'allow';
+
   for (let i = 0; i < len; i++) {
     const m = matches[i];
+
+    if (seen) {
+      if (seen.has(m.name)) {
+        if (dupMode === 'throw') {
+          throw new ParseError(
+            `Duplicate attribute '${m.name}'`,
+            ErrorCode.DUPLICATE_ATTRIBUTE,
+            errorPositionOf(parser.source)
+          );
+        }
+        continue; // 'ignore' — first occurrence wins, later ones dropped entirely
+      }
+      seen.add(m.name);
+    }
+
+    const rawVal = m.value;
+    if (rawVal === undefined) {
+      if (boolMode === 'throw') {
+        throw new ParseError(
+          `Valueless attribute '${m.name}' is not allowed`,
+          ErrorCode.BOOLEAN_ATTRIBUTE_REJECTED,
+          errorPositionOf(parser.source)
+        );
+      }
+      if (boolMode === 'ignore') continue; // drop silently, rest of tag unaffected
+    }
+
     const attrName = parser.processAttrName(m.name);
     if (attrName === false) continue;
     count++;
-    const rawVal = m.value;
     const attrVal = rawVal !== undefined ? rawVal : true;
     tagExp.rawAttributes[m.name] = attrVal;
     parsedAttrs.push({ name: attrName, value: attrVal, index: m.startIndex });

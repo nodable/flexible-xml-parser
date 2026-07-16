@@ -97,6 +97,64 @@ export function errorPositionOf(source) {
 }
 
 /**
+ * True for character codes that are illegal as literal characters anywhere in
+ * an XML document (element text, attribute values, CDATA, comments): 0x00-0x08,
+ * 0x0B, 0x0C, 0x0E-0x1F. Tab/LF/CR (0x09/0x0A/0x0D) are legal whitespace and
+ * excluded. A numeric character reference like `&#0;` is just ASCII text at
+ * this stage (entity expansion happens later, in the output builder), so it
+ * never reaches this check as a raw byte.
+ */
+function isIllegalControlCode(c) {
+  return c <= 8 || c === 11 || c === 12 || (c >= 14 && c <= 31);
+}
+
+/**
+ * Normalize a complete piece of document content (element text, CDATA
+ * content, or comment content) per XML §2.11: a real `\r\n` pair or a lone
+ * `\r` becomes a single `\n`; a bare `\n` is left alone. Also rejects illegal
+ * literal control characters (see isIllegalControlCode) — this check always
+ * runs, regardless of autoClose/lenient settings.
+ *
+ * Meant to be called exactly once per finished token (a whole text run, a
+ * whole CDATA block, a whole comment) — never mid-scan — so no chunk-boundary
+ * carry logic is needed: by the time a reader has a complete string, any
+ * `\r\n` that happened to straddle a feed() chunk boundary has already been
+ * concatenated back together by the caller.
+ *
+ * @param {string} str
+ * @param {object} [source] - for error position only; omit if unavailable.
+ * @returns {string}
+ */
+export function sanitizeContent(str, source) {
+  const len = str.length;
+  let hasCR = false;
+  for (let i = 0; i < len; i++) {
+    const c = str.charCodeAt(i);
+    if (isIllegalControlCode(c)) {
+      throw new ParseError(
+        `Illegal control character 0x${c.toString(16).padStart(2, '0')} in document content`,
+        ErrorCode.ILLEGAL_CHARACTER,
+        source ? errorPositionOf(source) : {}
+      );
+    }
+    if (c === 13) hasCR = true;
+  }
+  if (!hasCR) return str; // fast path — nothing to fold, no reallocation
+
+  let out = '';
+  let segStart = 0;
+  for (let i = 0; i < len; i++) {
+    if (str.charCodeAt(i) === 13) {
+      out += str.substring(segStart, i) + '\n';
+      if (str.charCodeAt(i + 1) === 10) i++; // \r\n pair → one \n, not two
+      segStart = i + 1;
+    }
+  }
+  out += str.substring(segStart);
+  return out;
+}
+
+/**
  * Assert that the upcoming characters in the source match the expected string.
  * If not enough data → throws UNEXPECTED_END.
  * If mismatch → throws INVALID_TAG with the given errorMsg.

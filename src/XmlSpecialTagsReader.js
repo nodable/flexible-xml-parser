@@ -1,5 +1,5 @@
 import { readPiExp, flushAttributes } from './XmlPartReader.js';
-import { expectMatch, errorPositionOf } from './util.js';
+import { expectMatch, errorPositionOf, sanitizeContent } from './util.js';
 import { ParseError, ErrorCode } from './ParseError.js';
 
 export function readCdata(parser) {
@@ -12,6 +12,8 @@ export function readCdata(parser) {
   expectMatch(parser.source, "CDATA[", "CDATA preamble");
 
   let text = parser.source.readUpto("]]>");
+  // Normalization is unconditional — applies even under xml:space="preserve".
+  text = sanitizeContent(text, parser.source);
   parser.outputBuilder.addLiteral(text);
 }
 
@@ -71,5 +73,6 @@ export function readComment(parser) {
   //<!- already consumed
   expectMatch(parser.source, "-", "comment second dash");
   let text = parser.source.readUpto("-->");
+  text = sanitizeContent(text, parser.source);
   parser.outputBuilder.addComment(text);
 }

@@ -253,8 +253,16 @@ function buildTagExpObj(exp, parser, expStart, forceToReadAttrs = false, quotePa
   }
 
   // Pass 1: collect raw attribute values for matcher.updateCurrent().
-  // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent().
-  if (forceToReadAttrs || !parser.options.skip.attributes && attrsExp.length > 0) {
+  // Pass 2 (flushAttributes) runs later in readOpeningTag, after updateCurrent()
+  // — and is still gated by skip.attributes there, so output/matcher visibility
+  // of attribute values is unaffected by the change below.
+  //
+  // This pass itself, however, always runs whenever an attribute expression is
+  // present — even when skip.attributes is true. Malformed attribute syntax
+  // (unquoted values, illegal duplicates, illegal control characters) is a
+  // document-validity problem, not an output-shaping one, so skip.attributes
+  // must not be able to silently let broken markup through.
+  if (forceToReadAttrs || attrsExp.length > 0) {
     collectRawAttributes(attrsExp, parser, tagExp, quotePairs, attrsLocalOffset, quotePairsLen);
   }
   // console.log(tagExp)
