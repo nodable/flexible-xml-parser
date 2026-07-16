@@ -80,13 +80,22 @@ export function xrunAcrossAllInputSources(testName) {
 export function runAcrossAllInputSourcesWithException(testName, xmlString, errMsg, parserOptions = {}) {
   const inputTypes = ['string', 'buffer', 'feedable'];
   // const inputTypes = ['string'];
-  let stringErrMsg = "";
-  let feedableErrMsg = "";
-  if (typeof errMsg === 'string') {
-    stringErrMsg = errMsg;
-  } else {
+  // let stringErrMsg = "";
+  // let feedableErrMsg = "";
+  // if (typeof errMsg === 'string') {
+  //   stringErrMsg = errMsg;
+  // } else {
+  //   stringErrMsg = errMsg.string;
+  //   feedableErrMsg = errMsg.feedable;
+  // }
+
+  let stringErrMsg, feedableErrMsg;
+  if (errMsg !== null && typeof errMsg === 'object' && !(errMsg instanceof RegExp) && ('string' in errMsg || 'feedable' in errMsg)) {
     stringErrMsg = errMsg.string;
     feedableErrMsg = errMsg.feedable;
+  } else {
+    stringErrMsg = errMsg;
+    feedableErrMsg = errMsg;
   }
 
   inputTypes.forEach(inputType => {

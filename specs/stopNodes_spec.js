@@ -438,7 +438,7 @@ describe("Stop Nodes — error scenarios", function () {
           <data>content</data>
           <nested>
             <deep>value</deep>`,
-    /unclosed/,
+    /unclosed/i,
     { tags: { stopNodes: ["root.stopNode"] } }
   );
 
@@ -481,7 +481,7 @@ describe("Stop Nodes — error scenarios", function () {
           <moreData>more</moreData>
         </stopNode>
       </root>`,
-    /unclosed/,
+    /unclosed/i,
     { tags: { stopNodes: [{ expression: "root.stopNode", skipEnclosures: [...xmlEnclosures] }] } }
   );
 
