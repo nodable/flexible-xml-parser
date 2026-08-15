@@ -12,6 +12,7 @@ export function readDocType(parser) {
     let entityCount = 0;
     let hasBody = false;
     let bodyDone = false;
+    let quoteChar = null; // tracks an open SYSTEM/PUBLIC literal before the '[' body starts
 
     while (parser.source.canRead()) {
         // Save a local snapshot of startIndex BEFORE consuming this character.
@@ -24,6 +25,19 @@ export function readDocType(parser) {
         const subTagStart = parser.source.startIndex;
 
         let ch = parser.source.readCh();
+
+        // Inside a quoted external-identifier literal (SYSTEM "..."/PUBLIC "...")
+        // that appears before the '[' body — XML allows '<' and '>' as plain
+        // data here, so nothing below should interpret them as structure
+        // until the matching closing quote is seen.
+        if (quoteChar !== null) {
+            if (ch === quoteChar) quoteChar = null;
+            continue;
+        }
+        if (!hasBody && (ch === '"' || ch === "'")) {
+            quoteChar = ch;
+            continue;
+        }
 
         if (ch === '<' && hasBody && !bodyDone) {
             // ── "<!…" sub-tag inside [...] body ───────────────────────────────
