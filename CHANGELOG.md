@@ -1,3 +1,6 @@
+**1.11.3 (2026-08-15)**
+- fix: reading SYSTEM/PUBLIC doctype
+
 **1.11.2 (2026-07-16)**
 - position in error msg
 - fix: missing error code INVALID_ATTRIBUTE_NAME
