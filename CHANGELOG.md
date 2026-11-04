@@ -1,3 +1,8 @@
+**1.11.4 (2026-11-04)**
+- fix: typings cjs
+- update output builders
+
+
 **1.11.3 (2026-08-15)**
 - fix: reading SYSTEM/PUBLIC doctype
 

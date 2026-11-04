@@ -25,3 +25,4 @@ Post release
 
 To remove tag
 git tag -d <tag_name>
+git push origin --delete v1.11.3
