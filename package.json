@@ -49,8 +49,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@nodable/base-output-builder": "^2.0.0",
-    "@nodable/compact-builder": "^2.0.0",
+    "@nodable/base-output-builder": "^2.0.1",
+    "@nodable/compact-builder": "^2.0.1",
     "path-expression-matcher": "^1.6.2",
     "xml-naming": "^0.3.0"
   },
@@ -60,12 +60,12 @@
     "@babel/preset-env": "^7.29.2",
     "@babel/register": "^7.28.6",
     "@byspec/xml": "^0.1.0",
-    "@nodable/entities": "^2.2.0",
+    "@nodable/entities": "^3.1.0",
     "@types/node": "^20.19.37",
     "babel-loader": "^10.1.1",
     "c8": "^11.0.0",
     "codebase-map": "^0.6.1",
-    "jasmine": "^6.1.0",
+    "jasmine": "^7.0.0",
     "typescript": "^6.0.2",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.2"
