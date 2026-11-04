@@ -544,7 +544,7 @@ interface X2jOptions {
 
   // --- output builder ---
   /** Pluggable output builder instance. Default: CompactObjBuilder */
-  OutputBuilder?: OutputBuilderFactory | null;
+  OutputBuilder?: OutputBuilderFactoryLike | null;
 
   /**
    * Callback fired by `NodeTreeBuilder` and `CompactObjBuilder` whenever a stop node
@@ -575,6 +575,15 @@ interface X2jOptions {
     rawContent: string,
     matcher: any,
   ) => void;
+}
+
+/**
+ * Minimal shape the parser needs from an output-builder factory, so factories
+ * from `@nodable/*-builder` packages (and custom ones) are accepted without
+ * having to match the parser's own builder interfaces below.
+ */
+interface OutputBuilderFactoryLike {
+  getInstance(parserOptions: any, readonlyMatcher: any): { getOutput(): any };
 }
 
 interface OutputBuilderFactory {
